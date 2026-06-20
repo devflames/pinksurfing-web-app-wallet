@@ -5,7 +5,7 @@ module.exports = {
     {
       name: 'ps-keyvault',
       cwd: `${root}/ps-wallet-backend-matt-created/python`,
-      script: 'python3',
+      script: '.venv/bin/python3',
       args: '-m ps_keyvault.api',
       interpreter: 'none',
       autorestart: true,

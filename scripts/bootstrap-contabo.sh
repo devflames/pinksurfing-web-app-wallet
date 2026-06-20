@@ -2,7 +2,7 @@
 set -euo pipefail
 [ "$(id -u)" -eq 0 ] || { echo "Run as root on VPS"; exit 1; }
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-apt-get update -qq && apt-get install -y -qq curl git ufw python3 python3-pip python3-venv
+apt-get update -qq && apt-get install -y -qq curl git ufw python3 python3-pip python3-venv build-essential python3-dev
 command -v node >/dev/null || { curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && apt-get install -y nodejs; }
 command -v pm2 >/dev/null || npm install -g pm2
 command -v caddy >/dev/null || apt-get install -y caddy
@@ -13,8 +13,4 @@ export DOMAIN=app.pinksurfing.com
 bash "$ROOT/scripts/ensure-env.sh"
 echo ""
 echo "Next on VPS:"
-echo "  cd $ROOT/pinksurfing-platform && npm ci && npm run build -w @pinksurfing/api && npm run build -w @pinksurfing/web"
-echo "  cd $ROOT/ps-wallet-backend-matt-created && npm ci"
-echo "  cd $ROOT/ps-wallet-backend-matt-created/python && pip3 install -e ."
-echo "  cd $ROOT && pm2 start ecosystem.config.cjs && pm2 save"
-echo "  bash scripts/verify.sh"
+echo "  bash $ROOT/scripts/deploy-build.sh"
