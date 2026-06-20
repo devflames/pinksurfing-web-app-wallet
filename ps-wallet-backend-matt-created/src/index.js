@@ -95,7 +95,7 @@ app.get('/', (req, res) => {
     docs: {
       swaggerUi: '/api-docs',
       openApiJson: '/api-docs.json',
-      publicUrl: 'https://app.pinksurfing.com/api/wallet/api-docs',
+      publicUrl: 'https://app.pinksurfing.com/api-docs',
     },
     endpoints: {
       auth: {

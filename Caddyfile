@@ -4,10 +4,18 @@
 #
 # DNS: A  app  →  173.249.48.238
 #
-# Copy: sudo cp infra/gateway/Caddyfile.app-subdomain.example /etc/caddy/Caddyfile
-#       sudo systemctl reload caddy
+# Copy: sudo cp Caddyfile /etc/caddy/Caddyfile && sudo systemctl reload caddy
 
 app.pinksurfing.com {
+	# Legacy wallet docs URL → canonical /api-docs
+	@legacyDocs path_regexp legacy ^/api/wallet/api-docs(.*)$
+	redir @legacyDocs /api-docs{re.legacy.1} permanent
+
+	# Wallet Swagger UI (direct to Node wallet :3099)
+	handle /api-docs* {
+		reverse_proxy 127.0.0.1:3099
+	}
+
 	handle /api/* {
 		reverse_proxy 127.0.0.1:8080
 	}
@@ -21,8 +29,3 @@ app.pinksurfing.com {
 		reverse_proxy 127.0.0.1:3000
 	}
 }
-
-# Optional: keep raw IP showing wallet API docs, or add wallet.pinksurfing.com
-# wallet.pinksurfing.com {
-#   reverse_proxy 127.0.0.1:3099
-# }

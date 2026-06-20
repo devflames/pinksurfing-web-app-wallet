@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="PinkSurfing">
+  <defs>
+    <linearGradient id="ps" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f472b6"/>
+      <stop offset="100%" stop-color="#a855f7"/>
+    </linearGradient>
+  </defs>
+  <rect width="32" height="32" rx="7" fill="#1a1025"/>
+  <path fill="url(#ps)" d="M6 22V10h3.2l3.4 6.2L16 10h3.1v12h-2.6v-7.1L13.4 22h-2.1l-3.1-7.1V22H6zm14.2 0 4.8-12h3.1l-4.8 12h-3.1z"/>
+</svg>
