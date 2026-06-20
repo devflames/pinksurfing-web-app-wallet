@@ -44,7 +44,7 @@ function buildOpenApiSpec() {
   return {
     openapi: '3.0.3',
     info: {
-      title: 'PinkSurfing Wallet API (Matt)',
+      title: 'PinkSurfing Wallet API',
       version: '1.0.0',
       description: [
         'Non-custodial Chia wallet backend — KeyVault on-chain backups, atomic swaps (BTC ↔ XCH),',
@@ -52,12 +52,12 @@ function buildOpenApiSpec() {
         '',
         '**Production:** proxied at `https://app.pinksurfing.com/api/wallet/*` via NestJS gateway.',
         '',
-        '**Raihan app API** (chat, PayChat channels, mobile profile): [coreapi.pinksurfing.com/api-docs/](https://coreapi.pinksurfing.com/api-docs/)',
+        '**App API** (chat, PayChat channels, mobile profile): [coreapi.pinksurfing.com/api-docs/](https://coreapi.pinksurfing.com/api-docs/)',
         '',
         '**Auth:** Mutating routes use Ed25519 headers (`X-Auth-Address`, `X-Auth-Timestamp`, `X-Auth-Signature`).',
         'Signature covers `<timestamp>:<nonce>:<METHOD>:<path>` (router path, e.g. `/create` not `/swaps/create`).',
       ].join('\n'),
-      contact: { name: 'PinkSurfing / Matt wallet team' },
+      contact: { name: 'PinkSurfing wallet team' },
     },
     servers: [
       { url: publicBase, description: 'Production (via gateway on app.pinksurfing.com)' },
