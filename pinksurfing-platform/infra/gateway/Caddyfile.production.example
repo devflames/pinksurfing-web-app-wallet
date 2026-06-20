@@ -1,0 +1,34 @@
+# Production Caddy — https://pinksurfing.com/app + /api/*
+# Copy to /etc/caddy/Caddyfile (adjust marketplace root if needed)
+#
+# Prerequisites on host:
+#   Next.js web :3000  (built with NEXT_PUBLIC_BASE_PATH=/app)
+#   NestJS gateway :8080
+#   Official Raihan + Matt backends (see docs/DEPLOYMENT_MANUAL.md)
+
+pinksurfing.com, www.pinksurfing.com {
+	# Platform app (pinksurfing-platform/apps/web)
+	handle /app* {
+		reverse_proxy 127.0.0.1:3000
+	}
+
+	# API gateway (Raihan + Matt proxy)
+	handle /api/* {
+		reverse_proxy 127.0.0.1:8080
+	}
+
+	# Existing marketplace / site root — configure separately
+	# handle {
+	#   reverse_proxy 127.0.0.1:MARKETPLACE_PORT
+	# }
+
+	# Health via gateway
+	handle /health {
+		reverse_proxy 127.0.0.1:8080
+	}
+}
+
+# Optional dedicated API host (if not using /api on main domain)
+# api.pinksurfing.com {
+#   reverse_proxy 127.0.0.1:8080
+# }

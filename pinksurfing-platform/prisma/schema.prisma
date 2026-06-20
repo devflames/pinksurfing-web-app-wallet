@@ -1,0 +1,374 @@
+// PinkSurfing Unified Platform — Prisma schema
+// Run from monorepo root: npm run db:migrate
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
+
+enum KycStatus {
+  NONE
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model User {
+  id             String     @id @default(uuid())
+  email          String?    @unique
+  phone          String?    @unique
+  passwordHash   String?
+  chiaAddress    String?    @unique @map("chia_address")
+  legacyMongoId  String?    @unique @map("legacy_mongo_id")
+  pspayId        String?    @unique @map("pspay_id")
+  kycStatus      KycStatus  @default(NONE) @map("kyc_status")
+  status         UserStatus @default(ACTIVE)
+  createdAt      DateTime   @default(now()) @map("created_at")
+  updatedAt      DateTime   @updatedAt @map("updated_at")
+
+  profile        UserProfile?
+  authMethods    AuthMethod[]
+  roles          UserRole[]
+  walletAccounts WalletAccount[]
+  chatMembers    ChatMember[]
+  messages       Message[]       @relation("MessageSender")
+  ledgerEntries  LedgerEntry[]
+  auditLogs      AuditLog[]      @relation("AuditActor")
+
+  @@map("users")
+}
+
+model UserProfile {
+  userId      String   @id @map("user_id")
+  firstName   String?  @map("first_name")
+  lastName    String?  @map("last_name")
+  displayName String?  @map("display_name")
+  avatarUrl   String?  @map("avatar_url")
+  bio         String?
+  locale      String?  @default("en")
+  timezone    String?
+  metadata    Json     @default("{}")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_profiles")
+}
+
+enum AuthMethodType {
+  PASSWORD
+  GOOGLE
+  EMAIL_OTP
+  WALLET_KEY
+}
+
+model AuthMethod {
+  id         String         @id @default(uuid())
+  userId     String         @map("user_id")
+  type       AuthMethodType
+  externalId String?        @map("external_id")
+  credential Json?
+  createdAt  DateTime       @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, type, externalId])
+  @@map("auth_methods")
+}
+
+model Role {
+  id          String           @id @default(uuid())
+  name        String           @unique
+  description String?
+  permissions RolePermission[]
+  users       UserRole[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String           @id @default(uuid())
+  code        String           @unique
+  description String?
+  roles       RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String @map("role_id")
+  permissionId String @map("permission_id")
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model UserRole {
+  userId String @map("user_id")
+  roleId String @map("role_id")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@map("user_roles")
+}
+
+model WalletAccount {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  chiaAddress  String   @unique @map("chia_address")
+  walletPk     String   @map("wallet_pk")
+  launcherId   String?  @map("launcher_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  keyVault KeyVault?
+
+  @@map("wallet_accounts")
+}
+
+model KeyVault {
+  launcherId   String   @id @map("launcher_id")
+  walletId     String   @unique @map("wallet_id")
+  ownerPubkey  String   @map("owner_pubkey")
+  latestCid    String?  @map("latest_cid")
+  status       String   @default("pending")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  wallet WalletAccount @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  @@map("key_vaults")
+}
+
+enum ChatRoomType {
+  PERSONAL
+  BUSINESS
+  PAYCHAT
+  GROUP
+}
+
+model ChatRoom {
+  id            String       @id @default(uuid())
+  type          ChatRoomType
+  legacyMongoId String?      @unique @map("legacy_mongo_id")
+  createdAt     DateTime     @default(now()) @map("created_at")
+
+  members   ChatMember[]
+  messages  Message[]
+  capsules  ExecutionCapsule[]
+
+  @@map("chat_rooms")
+}
+
+model ChatMember {
+  roomId String @map("room_id")
+  userId String @map("user_id")
+  role   String @default("member")
+
+  room ChatRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([roomId, userId])
+  @@map("chat_members")
+}
+
+model Message {
+  id            String   @id @default(uuid())
+  roomId        String   @map("room_id")
+  senderId      String   @map("sender_id")
+  body          String?
+  ciphertext    Bytes?
+  messageType   String   @default("text") @map("message_type")
+  legacyMongoId String?  @unique @map("legacy_mongo_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  room   ChatRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  sender User     @relation("MessageSender", fields: [senderId], references: [id])
+
+  @@index([roomId, createdAt(sort: Desc)])
+  @@map("messages")
+}
+
+enum BusinessContractState {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  PAID_OFF_PLATFORM
+  ESCROW_FUNDING_INITIATED
+  ESCROW_FUNDED
+  IN_PROGRESS
+  EVIDENCE_SUBMITTED
+  VERIFIED
+  COMPLETED
+  DISPUTED
+  CANCELLED
+  LAPSED
+}
+
+enum BusinessSettlementMode {
+  OFF_PLATFORM
+  ESCROW
+  SQUARE
+  BTC_SWAP
+}
+
+model BusinessContract {
+  id                 String                 @id @default(uuid())
+  legacyMongoId      String?                @unique @map("legacy_mongo_id")
+  conversationId     String                 @map("conversation_id")
+  createdByUserId    String                 @map("created_by_user_id")
+  counterpartyUserId String                 @map("counterparty_user_id")
+  title              String                 @default("Contract")
+  scopeText          String                 @map("scope_text")
+  lineItems          Json                   @default("[]") @map("line_items")
+  priceAmount        Decimal?               @map("price_amount") @db.Decimal(19, 4)
+  priceCurrency      String                 @default("USD") @map("price_currency")
+  deadlineAt         DateTime?              @map("deadline_at")
+  settlementMode     BusinessSettlementMode @default(OFF_PLATFORM) @map("settlement_mode")
+  state              BusinessContractState  @default(DRAFT)
+  stateHistory       Json                   @default("[]") @map("state_history")
+  legalAck           Json                   @default("{}") @map("legal_ack")
+  needsAttention     Boolean                @default(false) @map("needs_attention")
+  schemaVersion      Int                    @default(1) @map("schema_version")
+  createdAt          DateTime               @default(now()) @map("created_at")
+  updatedAt          DateTime               @updatedAt @map("updated_at")
+
+  @@index([conversationId])
+  @@index([state])
+  @@map("business_contracts")
+}
+
+enum CapsuleStatus {
+  PENDING_AUTHORITY
+  PENDING_INTENT
+  PENDING_RESERVE
+  PENDING_ACCEPTANCE
+  EXECUTING
+  SETTLED
+  FAILED
+  CANCELLED
+}
+
+enum SettlementMode {
+  SQUARE
+  STRIPE
+  CHIA_OFFER
+  MOONPAY
+  OFF_PLATFORM
+  BTC_SWAP
+}
+
+model ExecutionCapsule {
+  id              String         @id @default(uuid())
+  roomId          String         @map("room_id")
+  initiatorId     String         @map("initiator_id")
+  counterpartyId  String         @map("counterparty_id")
+  status          CapsuleStatus  @default(PENDING_AUTHORITY)
+  settlementMode  SettlementMode @map("settlement_mode")
+  authority       Json?
+  intent          Json?
+  settlement      Json?
+  legacyMongoId   String?        @unique @map("legacy_mongo_id")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  room          ChatRoom       @relation(fields: [roomId], references: [id])
+  stateMessages StateMessage[]
+  paymentIntent PaymentIntent?
+
+  @@index([roomId, status])
+  @@map("execution_capsules")
+}
+
+model StateMessage {
+  id         String   @id @default(uuid())
+  capsuleId  String   @map("capsule_id")
+  fromState  String?  @map("from_state")
+  toState    String   @map("to_state")
+  actorId    String?  @map("actor_id")
+  payload    Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  capsule ExecutionCapsule @relation(fields: [capsuleId], references: [id], onDelete: Cascade)
+
+  @@index([capsuleId, createdAt])
+  @@map("state_messages")
+}
+
+model PaymentIntent {
+  id         String   @id @default(uuid())
+  capsuleId  String   @unique @map("capsule_id")
+  provider   String
+  externalId String?  @map("external_id")
+  amount     Decimal  @db.Decimal(19, 8)
+  currency   String
+  status     String
+  metadata   Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  capsule ExecutionCapsule @relation(fields: [capsuleId], references: [id], onDelete: Cascade)
+  events  PaymentEvent[]
+
+  @@map("payment_intents")
+}
+
+model PaymentEvent {
+  id              String   @id @default(uuid())
+  paymentIntentId String   @map("payment_intent_id")
+  eventType       String   @map("event_type")
+  payload         Json?
+  idempotencyKey  String?  @unique @map("idempotency_key")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  paymentIntent PaymentIntent @relation(fields: [paymentIntentId], references: [id], onDelete: Cascade)
+
+  @@map("payment_events")
+}
+
+model LedgerEntry {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  type      String
+  amount    Decimal  @db.Decimal(19, 8)
+  currency  String
+  status    String
+  txHash    String?  @map("tx_hash")
+  metadata  Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("ledger_entries")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  actorId    String?  @map("actor_id")
+  action     String
+  resource   String
+  resourceId String?  @map("resource_id")
+  metadata   Json?
+  ipAddress  String?  @map("ip_address")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  actor User? @relation("AuditActor", fields: [actorId], references: [id])
+
+  @@index([createdAt(sort: Desc)])
+  @@index([actorId])
+  @@map("audit_logs")
+}

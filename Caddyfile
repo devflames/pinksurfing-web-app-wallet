@@ -1,0 +1,28 @@
+# Caddy — app.pinksurfing.com (Contabo VPS)
+# Marketplace stays on https://pinksurfing.com/ (other host/IP).
+# Platform web + gateway + wallet on this VPS.
+#
+# DNS: A  app  →  173.249.48.238
+#
+# Copy: sudo cp infra/gateway/Caddyfile.app-subdomain.example /etc/caddy/Caddyfile
+#       sudo systemctl reload caddy
+
+app.pinksurfing.com {
+	handle /api/* {
+		reverse_proxy 127.0.0.1:8080
+	}
+
+	handle /health {
+		reverse_proxy 127.0.0.1:8080
+	}
+
+	# Next.js at site root (NEXT_PUBLIC_BASE_PATH empty)
+	handle {
+		reverse_proxy 127.0.0.1:3000
+	}
+}
+
+# Optional: keep raw IP showing wallet API docs, or add wallet.pinksurfing.com
+# wallet.pinksurfing.com {
+#   reverse_proxy 127.0.0.1:3099
+# }

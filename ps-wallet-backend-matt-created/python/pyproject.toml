@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ps-keyvault"
+version = "0.1.0"
+description = "PinkSurfing KeyVault — On-chain encrypted wallet backup via Chia singletons"
+requires-python = ">=3.10"
+dependencies = [
+    "chia-blockchain>=2.1.0",
+    "chia-rs>=0.5.0",
+    "clvm-tools>=0.4.6",
+    "fastapi>=0.104.0",
+    "uvicorn>=0.24.0",
+    "pydantic>=2.0.0",
+    "aiohttp>=3.9.0",
+    "requests>=2.31.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["ps_keyvault*"]
+
+[tool.setuptools.package-data]
+"ps_keyvault.clsp" = ["*.clsp", "*.clib"]

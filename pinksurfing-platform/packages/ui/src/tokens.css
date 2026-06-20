@@ -1,0 +1,28 @@
+/* PinkSurfing — Flutter app palette (ps-flutter-app color_const.dart) */
+:root {
+  --ps-bg: #0e0f13;
+  --ps-surf: #1b1b27;
+  --ps-card: #191924;
+  --ps-card2: #1e1c25;
+  --ps-tile: #1b1a26;
+  --ps-brd: rgba(255, 255, 255, 0.08);
+  --ps-brd2: #5d5d60;
+  --ps-primary: #9747ff;
+  --ps-pink: #9747ff;
+  --ps-purple: #9747ff;
+  --ps-purple-light: #b882ff;
+  --ps-purple-dark: #6f00ff;
+  --ps-cyan: #00b8ff;
+  --ps-pink-soft: #b882ff;
+  --ps-green: #2ecc71;
+  --ps-gold: #d4a017;
+  --ps-amber: #ef9f27;
+  --ps-red: #e24b4a;
+  --ps-white: #ffffff;
+  --ps-muted: #a9a9a9;
+  --ps-dim: #787878;
+  --ps-indicator: #de2fd6;
+  --ps-gradient-border-start: #933fff;
+  --ps-gradient-border-end: #b882ff;
+  --ps-blur-orb: #8b33fe;
+}

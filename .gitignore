@@ -1,0 +1,11 @@
+﻿node_modules/
+.next/
+dist/
+.env
+.env.local
+*.log
+__pycache__/
+*.pyc
+.venv/
+.DS_Store
+data/wallet.db

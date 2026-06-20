@@ -1,0 +1,26 @@
+{
+  "name": "ps-wallet-backend",
+  "version": "1.0.0",
+  "description": "PinkSurfing wallet backend — Google OAuth proxy for Drive backup + Chia on-chain inscription endpoints",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "test": "node src/test.js"
+  },
+  "engines": {
+    "node": ">=18.0.0 <=22.x"
+  },
+  "dependencies": {
+    "agora-token": "^2.0.5",
+    "better-sqlite3": "^9.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "googleapis": "^129.0.0",
+    "otpauth": "^9.5.0",
+    "swagger-ui-express": "^5.0.1",
+    "uuid": "^9.0.0"
+  },
+  "license": "MIT"
+}

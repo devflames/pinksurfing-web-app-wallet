@@ -1,0 +1,71 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; PinkSurfing p2_keyvault — Pay-to-KeyVault Singleton
+;;
+;; XCH coins locked to a KeyVault singleton. Can only be spent when the
+;; singleton's inner puzzle creates a puzzle announcement authorizing this
+;; specific coin to run a specific delegated puzzle.
+;;
+;; Curried arguments:
+;;   SINGLETON_MOD_HASH    - mod hash of singleton_top_layer_v1_1
+;;   LAUNCHER_ID           - launcher ID of the KeyVault singleton
+;;   LAUNCHER_PUZZLE_HASH  - standard singleton launcher puzzle hash
+;;
+;; Runtime arguments:
+;;   singleton_inner_puzzle_hash - current inner puzzle hash of the vault singleton
+;;   my_id                      - this coin's ID (for assertion + announcement binding)
+;;   delegated_puzzle            - arbitrary puzzle to run (defines outputs)
+;;   delegated_solution          - solution for the delegated puzzle
+;;
+;; Security: The singleton must announce sha256(my_id, sha256tree(delegated_puzzle))
+;; to prove the owner authorized this exact spend via the 's' (spend) case.
+;;
+;; Deposit: Anyone can create coins with this puzzle hash to deposit XCH.
+;; Withdraw: Only the vault owner can spend (via singleton authorization).
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(mod
+  (
+    ;; curried arguments
+    SINGLETON_MOD_HASH
+    LAUNCHER_ID
+    LAUNCHER_PUZZLE_HASH
+
+    ;; runtime arguments
+    singleton_inner_puzzle_hash
+    my_id
+    delegated_puzzle
+    delegated_solution
+  )
+
+  (include "condition_codes.clib")
+  (include "utils.clib")
+
+  ;; Calculate the full singleton puzzle hash from its struct + inner puzzle hash
+  (defun-inline vault_singleton_puzzle_hash (SINGLETON_MOD_HASH LAUNCHER_ID LAUNCHER_PUZZLE_HASH inner_ph)
+    (calculate_full_puzzle_hash
+      (c SINGLETON_MOD_HASH (c LAUNCHER_ID LAUNCHER_PUZZLE_HASH))
+      inner_ph
+    )
+  )
+
+  ;; Main: assert authorization from singleton, then run delegated puzzle
+  (c
+    ;; Assert our coin ID to bind this spend to a specific coin
+    (list ASSERT_MY_COIN_ID my_id)
+    (c
+      ;; Assert that the vault singleton announced authorization for this coin
+      ;; The singleton's 's' case creates: CREATE_PUZZLE_ANNOUNCEMENT (sha256 p2_coin_id delegated_puzzle_hash)
+      ;; ASSERT_PUZZLE_ANNOUNCEMENT checks: sha256(singleton_full_puzzle_hash, announcement_message)
+      (list ASSERT_PUZZLE_ANNOUNCEMENT
+        (sha256
+          (vault_singleton_puzzle_hash SINGLETON_MOD_HASH LAUNCHER_ID LAUNCHER_PUZZLE_HASH singleton_inner_puzzle_hash)
+          (sha256 my_id (sha256tree delegated_puzzle))
+        )
+      )
+      ;; Run the delegated puzzle — this produces the actual output conditions
+      ;; (e.g., CREATE_COIN to send XCH to a wallet address)
+      (a delegated_puzzle delegated_solution)
+    )
+  )
+)

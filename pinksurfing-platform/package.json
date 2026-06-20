@@ -1,0 +1,35 @@
+{
+  "name": "pinksurfing-platform",
+  "private": true,
+  "version": "0.1.0",
+  "description": "PinkSurfing unified platform — NestJS gateway + Next.js web",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev:api & npm run dev:web",
+    "dev:api": "npm run start:dev -w @pinksurfing/api",
+    "dev:web": "npm run dev -w @pinksurfing/web",
+    "demo": "powershell -File ./scripts/start-client-demo.ps1",
+    "demo:prod": "powershell -File ./scripts/start-client-demo.ps1 -Production",
+    "cloud:demo": "bash scripts/start-cloud-demo.sh",
+    "build": "npm run build -w @pinksurfing/api && npm run build -w @pinksurfing/web",
+    "start:demo": "npm run start:prod -w @pinksurfing/api & npm run start -w @pinksurfing/web",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:push": "prisma db push",
+    "lint": "npm run lint -w @pinksurfing/web"
+  },
+  "devDependencies": {
+    "jsonwebtoken": "^9.0.2",
+    "mongodb-memory-server": "^10.1.4",
+    "prisma": "^6.9.0"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.19.3"
+  }
+}

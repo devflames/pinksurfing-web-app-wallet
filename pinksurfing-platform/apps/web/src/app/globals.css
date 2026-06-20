@@ -1,0 +1,597 @@
+@import "tailwindcss";
+@import "@pinksurfing/ui/tokens.css";
+
+@theme inline {
+  --font-sans: var(--font-poppins), system-ui, -apple-system, sans-serif;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+/* Flutter BlurryScaffold — ambient purple orbs on dark base */
+.ps-app-bg {
+  position: relative;
+  min-height: 100vh;
+  background: var(--ps-bg);
+  overflow: hidden;
+}
+
+.ps-app-bg::before,
+.ps-app-bg::after {
+  content: '';
+  position: fixed;
+  border-radius: 50%;
+  pointer-events: none;
+  filter: blur(80px);
+  opacity: 0.45;
+  z-index: 0;
+}
+
+.ps-app-bg::before {
+  width: min(420px, 70vw);
+  height: min(420px, 70vw);
+  top: -120px;
+  left: -80px;
+  background: var(--ps-blur-orb);
+}
+
+.ps-app-bg::after {
+  width: min(360px, 60vw);
+  height: min(360px, 60vw);
+  bottom: 10%;
+  right: -60px;
+  background: var(--ps-blur-orb);
+}
+
+.ps-app-bg > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Flutter buttonGradient + borderGradient utilities */
+.ps-btn-primary {
+  background: linear-gradient(90deg, var(--ps-primary) 0%, var(--ps-purple-dark) 100%);
+  color: var(--ps-white);
+  border-radius: 14px;
+  font-weight: 600;
+}
+
+.ps-btn-primary:hover {
+  opacity: 0.92;
+}
+
+.ps-gradient-border {
+  border: 2px solid transparent;
+  background:
+    linear-gradient(var(--ps-surf), var(--ps-surf)) padding-box,
+    linear-gradient(180deg, var(--ps-gradient-border-start) 55.5%, var(--ps-gradient-border-end) 100%)
+      border-box;
+}
+
+.ps-feature-tile {
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 12px 16px;
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--ps-white);
+  text-align: left;
+  transition: background 0.15s ease;
+}
+
+.ps-feature-tile:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+/* Neomorphism — Explore tiles (dark soft UI) */
+.ps-neu-explore {
+  --ps-neu-base: var(--ps-card);
+  background: var(--ps-neu-base);
+  border: none;
+  border-radius: 1.25rem;
+  box-shadow:
+    7px 7px 16px rgba(0, 0, 0, 0.55),
+    -6px -6px 14px rgba(255, 255, 255, 0.04);
+  transition:
+    box-shadow 0.2s ease,
+    transform 0.15s ease;
+}
+
+.ps-neu-explore:hover {
+  box-shadow:
+    9px 9px 20px rgba(0, 0, 0, 0.62),
+    -7px -7px 16px rgba(255, 255, 255, 0.05);
+}
+
+.ps-neu-explore:active {
+  box-shadow:
+    inset 5px 5px 12px rgba(0, 0, 0, 0.58),
+    inset -4px -4px 10px rgba(255, 255, 255, 0.03);
+  transform: scale(0.985);
+}
+
+.ps-neu-explore-featured {
+  box-shadow:
+    7px 7px 16px rgba(0, 0, 0, 0.55),
+    -6px -6px 14px rgba(151, 71, 255, 0.1),
+    0 0 0 1px rgba(151, 71, 255, 0.14);
+}
+
+.ps-neu-explore-featured:hover {
+  box-shadow:
+    9px 9px 20px rgba(0, 0, 0, 0.62),
+    -7px -7px 16px rgba(151, 71, 255, 0.14),
+    0 0 0 1px rgba(151, 71, 255, 0.2);
+}
+
+.ps-neu-explore-featured:active {
+  box-shadow:
+    inset 5px 5px 12px rgba(0, 0, 0, 0.58),
+    inset -4px -4px 10px rgba(151, 71, 255, 0.06);
+}
+
+.ps-neu-icon {
+  display: flex;
+  height: 2.25rem;
+  width: 2.25rem;
+  shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.75rem;
+  background: var(--ps-neu-base);
+  font-size: 1.125rem;
+  line-height: 1;
+  box-shadow:
+    inset 3px 3px 6px rgba(0, 0, 0, 0.45),
+    inset -2px -2px 5px rgba(255, 255, 255, 0.04);
+}
+
+/* Create Invoice — matches Flutter / print mockup */
+.ps-invoice-sheet {
+  background: linear-gradient(180deg, #12101a 0%, #0e0f13 100%);
+}
+
+.ps-invoice-header {
+  align-items: start;
+}
+
+.ps-invoice-logo {
+  width: 84px;
+  height: 84px;
+  flex-shrink: 0;
+}
+
+@media (min-width: 640px) {
+  .ps-invoice-logo {
+    width: 92px;
+    height: 92px;
+  }
+}
+
+.ps-invoice-meta {
+  padding-left: 0.5rem;
+}
+
+.ps-invoice-input {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.35);
+  padding: 6px 8px;
+  font-size: 10px;
+  color: var(--ps-white);
+  outline: none;
+}
+
+.ps-invoice-input:focus {
+  border-color: rgba(151, 71, 255, 0.45);
+}
+
+.ps-invoice-textarea {
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.35);
+  padding: 8px 10px;
+  font-size: 10px;
+  color: var(--ps-white);
+  outline: none;
+  resize: vertical;
+}
+
+.ps-invoice-textarea:focus {
+  border-color: rgba(151, 71, 255, 0.45);
+}
+
+.ps-invoice-total-pill {
+  border-radius: 999px;
+  background: linear-gradient(135deg, #4a2d6e 0%, #2a1a3d 100%);
+  border: 1px solid rgba(151, 71, 255, 0.35);
+  color: var(--ps-white);
+  text-align: center;
+}
+
+/* Business profile — hex detail fields */
+.ps-hex-field {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  border-radius: 8px;
+  border: 1px solid rgba(151, 71, 255, 0.35);
+  background: linear-gradient(135deg, rgba(151, 71, 255, 0.18) 0%, rgba(111, 0, 255, 0.08) 100%);
+  padding: 4px 8px;
+  clip-path: polygon(8px 0, calc(100% - 8px) 0, 100% 50%, calc(100% - 8px) 100%, 8px 100%, 0 50%);
+  min-height: 36px;
+  justify-content: center;
+}
+
+.ps-hex-field-label {
+  font-size: 7px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ps-purple-light);
+}
+
+.ps-hex-field-value {
+  font-size: 8px;
+  line-height: 1.2;
+  color: var(--ps-white);
+}
+
+/* PayChat dial — neomorphism */
+.ps-paychat-dial {
+  background: radial-gradient(ellipse at 50% 30%, #1a1a22 0%, #0e0f13 70%);
+}
+
+.ps-neu-inset {
+  background: var(--ps-card);
+  box-shadow:
+    inset 6px 6px 14px rgba(0, 0, 0, 0.65),
+    inset -4px -4px 10px rgba(255, 255, 255, 0.03);
+}
+
+.ps-neu-pressed {
+  background: var(--ps-card);
+  box-shadow:
+    inset 4px 4px 10px rgba(0, 0, 0, 0.55),
+    inset -3px -3px 8px rgba(255, 255, 255, 0.03);
+}
+
+.ps-neu-pop {
+  background: linear-gradient(145deg, #2a2a35, #14141c);
+  box-shadow:
+    6px 6px 14px rgba(0, 0, 0, 0.7),
+    -4px -4px 10px rgba(255, 255, 255, 0.06),
+    0 0 20px rgba(255, 20, 147, 0.15);
+}
+
+.ps-neu-toggle {
+  background: var(--ps-card);
+  box-shadow:
+    inset 5px 5px 12px rgba(0, 0, 0, 0.58),
+    inset -4px -4px 10px rgba(255, 255, 255, 0.03);
+}
+
+.ps-neu-toggle-on {
+  box-shadow:
+    inset 2px 2px 6px rgba(0, 0, 0, 0.45),
+    inset -2px -2px 5px rgba(0, 184, 255, 0.08),
+    0 0 12px rgba(0, 184, 255, 0.2);
+}
+
+.ps-paychat-knob-wrap {
+  width: 220px;
+  height: 220px;
+  cursor: grab;
+  touch-action: none;
+}
+
+.ps-paychat-knob-wrap.ps-paychat-knob-active {
+  cursor: grabbing;
+}
+
+.ps-paychat-tick-ring {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ps-paychat-tick {
+  position: absolute;
+  width: 2px;
+  height: 10px;
+  border-radius: 1px;
+  background: rgba(255, 255, 255, 0.08);
+  transform-origin: center 92px;
+}
+
+.ps-paychat-tick-lit {
+  background: var(--ps-cyan);
+  box-shadow: 0 0 6px rgba(0, 184, 255, 0.75);
+}
+
+.ps-paychat-knob {
+  position: absolute;
+  inset: 28px;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #252530, #121218);
+  box-shadow:
+    8px 8px 18px rgba(0, 0, 0, 0.75),
+    -6px -6px 14px rgba(255, 255, 255, 0.04);
+  transition: transform 0.08s ease-out;
+}
+
+.ps-paychat-knob-dot {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  margin-left: -4px;
+  border-radius: 50%;
+  background: var(--ps-cyan);
+  box-shadow: 0 0 10px rgba(0, 184, 255, 0.9);
+}
+
+.ps-neu-scroll-track {
+  background: var(--ps-card);
+  box-shadow:
+    inset 5px 5px 12px rgba(0, 0, 0, 0.6),
+    inset -3px -3px 8px rgba(255, 255, 255, 0.03);
+  cursor: ew-resize;
+  touch-action: pan-x;
+}
+
+.ps-neu-scroll-rib {
+  display: block;
+  width: 4px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #3a3a45 0%, #6a6a78 50%, #3a3a45 100%);
+  box-shadow: 1px 0 0 rgba(0, 0, 0, 0.4);
+}
+
+/* Home chat tab bar — Personal / Business 50-50 */
+.ps-chat-tab-halves {
+  box-sizing: border-box;
+}
+
+.ps-chat-tab-cell {
+  display: flex;
+  min-height: 44px;
+  min-width: 0;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 8px;
+  text-align: center;
+  border-right: 1px solid var(--ps-brd);
+}
+
+.ps-chat-tab-cell:last-child {
+  border-right: none;
+}
+
+/* PayChat tab bar — same width as chat rows (mx-2 + calc) */
+.ps-paychat-tab-thirds {
+  box-sizing: border-box;
+}
+
+.ps-paychat-tab-cell {
+  display: flex;
+  min-height: 56px;
+  min-width: 0;
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 6px;
+  text-align: center;
+  border-right: 1px solid var(--ps-brd);
+}
+
+.ps-paychat-tab-cell:last-child {
+  border-right: none;
+}
+
+.ps-paychat-tab-cell-dial {
+  padding: 0;
+  align-items: stretch;
+}
+
+.ps-paychat-dial-btn {
+  height: 100%;
+  min-height: 56px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+/* Mini PayChat dial icon in tab bar */
+.ps-paychat-dial-icon {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+}
+
+.ps-paychat-tick-ring-mini {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.ps-paychat-tick-mini {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 1.5px;
+  height: 4px;
+  margin-left: -0.75px;
+  margin-top: -2px;
+  border-radius: 1px;
+  background: rgba(255, 255, 255, 0.1);
+  transform-origin: center 15px;
+}
+
+.ps-paychat-tick-mini-lit {
+  background: var(--ps-cyan);
+  box-shadow: 0 0 4px rgba(0, 184, 255, 0.8);
+}
+
+.ps-paychat-knob-mini-wrap {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 20px;
+  height: 20px;
+  pointer-events: none;
+}
+
+.ps-paychat-knob-mini {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #252530, #121218);
+  box-shadow:
+    3px 3px 8px rgba(0, 0, 0, 0.7),
+    -2px -2px 6px rgba(255, 255, 255, 0.04);
+}
+
+.ps-paychat-knob-dot-mini {
+  position: absolute;
+  top: 2px;
+  left: 50%;
+  width: 3px;
+  height: 3px;
+  margin-left: -1.5px;
+  border-radius: 50%;
+  background: var(--ps-cyan);
+  box-shadow: 0 0 5px rgba(0, 184, 255, 0.9);
+}
+
+.ps-neu-pop-mini {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 10;
+  display: flex;
+  height: 14px;
+  width: 14px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: linear-gradient(145deg, #2a2a35, #14141c);
+  box-shadow:
+    3px 3px 8px rgba(0, 0, 0, 0.65),
+    -2px -2px 5px rgba(255, 255, 255, 0.05),
+    0 0 8px rgba(255, 20, 147, 0.12);
+  pointer-events: none;
+}
+
+/* Business card — neomorphic gold action pill */
+.ps-bizcard-gold-pill {
+  background: linear-gradient(
+    160deg,
+    #f7e08a 0%,
+    #e8c547 18%,
+    #d4a017 42%,
+    #b8860b 68%,
+    #daa520 88%,
+    #f0d060 100%
+  );
+  border-radius: 999px;
+  border: 1px solid rgba(180, 130, 20, 0.55);
+  box-shadow:
+    inset 2px 3px 5px rgba(255, 255, 255, 0.62),
+    inset -2px -3px 6px rgba(0, 0, 0, 0.38),
+    4px 5px 12px rgba(0, 0, 0, 0.65),
+    -2px -2px 4px rgba(255, 255, 255, 0.06);
+}
+
+/* Business card AR scan overlay */
+.ps-bizcard-ar-overlay {
+  background: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0.55) 0%,
+    rgba(0, 20, 40, 0.75) 50%,
+    rgba(0, 0, 0, 0.65) 100%
+  );
+  backdrop-filter: blur(2px);
+}
+
+.ps-bizcard-ar-panel {
+  border-radius: 14px;
+  border: 1px solid rgba(0, 184, 255, 0.35);
+  background: rgba(10, 12, 18, 0.92);
+  padding: 12px;
+  box-shadow:
+    0 0 0 1px rgba(255, 20, 147, 0.15),
+    0 8px 32px rgba(0, 0, 0, 0.65),
+    0 0 24px rgba(0, 184, 255, 0.12);
+}
+
+.ps-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--ps-brd2) transparent;
+}
+
+.ps-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.ps-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.ps-scroll::-webkit-scrollbar-thumb {
+  background: var(--ps-brd2);
+  border-radius: 999px;
+}
+
+.ps-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--ps-muted);
+}
+
+/* Business card 3D flip — front & back same footprint */
+.ps-card-flip-scene {
+  perspective: 1200px;
+  width: 100%;
+}
+
+.ps-card-flip-inner {
+  position: relative;
+  width: 100%;
+  transform-style: preserve-3d;
+  transition: transform 0.7s cubic-bezier(0.45, 0.05, 0.25, 1);
+}
+
+.ps-card-flip-inner.is-flipped {
+  transform: rotateY(180deg);
+}
+
+.ps-card-flip-face {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  width: 100%;
+}
+
+.ps-card-flip-back {
+  position: absolute;
+  inset: 0;
+  transform: rotateY(180deg);
+}
+
+body {
+  background: var(--ps-bg);
+  color: var(--ps-white);
+  font-family: var(--font-sans);
+}

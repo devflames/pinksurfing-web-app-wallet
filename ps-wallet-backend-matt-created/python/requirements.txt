@@ -1,0 +1,14 @@
+# PinkSurfing KeyVault Python Service
+# Chia blockchain SDK
+chia-blockchain>=2.1.0
+chia-rs>=0.5.0
+clvm-tools>=0.4.6
+
+# Web framework
+fastapi>=0.104.0
+uvicorn>=0.24.0
+pydantic>=2.0.0
+
+# HTTP client
+aiohttp>=3.9.0
+requests>=2.31.0

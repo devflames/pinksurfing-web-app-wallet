@@ -1,0 +1,229 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; PinkSurfing KeyVault Singleton Inner Puzzle
+;;
+;; Manages encrypted wallet backup versions on the Chia blockchain.
+;; Adapted from mothsoft/solslot-backend vault_singleton_inner.clsp (branch 40).
+;;
+;; Curried arguments:
+;;   SINGLETON_STRUCT          - standard singleton struct (MOD_HASH, (LAUNCHER_ID, LAUNCHER_HASH))
+;;   OWNER_PUBKEY              - BLS public key of the wallet owner
+;;   BACKUPS_MERKLE_ROOT       - Merkle root of all backup version hashes
+;;   BACKUP_COUNT              - number of backup versions committed
+;;   LATEST_CID_HASH          - sha256 of the latest IPFS CID string
+;;
+;; Spend cases:
+;;   'u' (update)   - add new backup version, requires owner BLS signature
+;;                     args: (new_backups_merkle_root new_backup_count new_cid_hash)
+;;   't' (transfer) - change owner pubkey (key rotation / recovery)
+;;                     args: (new_owner_pubkey)
+;;   's' (spend)    - authorize spending p2_keyvault coins (vault withdrawal)
+;;                     args: ((p2_coin_id_1 delegated_puzzle_hash_1) (p2_coin_id_2 ...) ...)
+;;   'a' (announce) - announce current state (read-only, no state change)
+;;                     args: ()
+;;
+;; Each spend recreates the singleton with updated curried arguments.
+;; The Merkle tree of backup CID hashes enables verification of any version.
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(mod
+  (
+    ;; curried arguments
+    KEYVAULT_MOD_HASH
+    SINGLETON_STRUCT
+    OWNER_PUBKEY
+    BACKUPS_MERKLE_ROOT
+    BACKUP_COUNT
+    LATEST_CID_HASH
+
+    ;; runtime arguments
+    my_id
+    my_inner_puzzlehash
+    my_amount
+    spend_case
+    args
+  )
+
+  (include "condition_codes.clib")
+  (include "utils.clib")
+  (include "merkle_utils.clib")
+
+  (defconst SPEND_UPDATE 'u')
+  (defconst SPEND_TRANSFER 't')
+  (defconst SPEND_VAULT 's')
+  (defconst SPEND_ANNOUNCE 'a')
+
+  ;; Base conditions: assert identity, recreate is handled per-case
+  (defun base_conditions (SINGLETON_STRUCT my_id my_amount my_inner_puzzlehash)
+    (list
+      (list ASSERT_MY_COIN_ID my_id)
+      (list ASSERT_MY_AMOUNT my_amount)
+      (list ASSERT_MY_PUZZLEHASH (calculate_full_puzzle_hash SINGLETON_STRUCT my_inner_puzzlehash))
+    )
+  )
+
+  ;; Calculate the new inner puzzle hash for state transition
+  ;; This allows the singleton to recreate itself with new curried args
+  (defun-inline new_inner_puzzle_hash (KEYVAULT_MOD_HASH SINGLETON_STRUCT owner_pubkey backups_merkle_root backup_count latest_cid_hash)
+    (curry_hashes KEYVAULT_MOD_HASH
+      (sha256tree KEYVAULT_MOD_HASH)
+      (sha256tree SINGLETON_STRUCT)
+      (sha256tree owner_pubkey)
+      (sha256tree backups_merkle_root)
+      (sha256tree backup_count)
+      (sha256tree latest_cid_hash)
+    )
+  )
+
+  ;; SPEND_UPDATE: Add a new backup version
+  ;; Requires owner BLS signature over (my_id new_cid_hash)
+  ;; args = (new_backups_merkle_root new_backup_count new_cid_hash)
+  (defun spend_update (KEYVAULT_MOD_HASH SINGLETON_STRUCT OWNER_PUBKEY my_id my_amount my_inner_puzzlehash args conditions_so_far)
+    (c
+      ;; Require owner signature: AGG_SIG_ME ensures it's tied to this coin
+      (list AGG_SIG_ME OWNER_PUBKEY (sha256 my_id (f (r (r args)))))
+      (c
+        ;; Recreate singleton with new state
+        (list CREATE_COIN
+          (new_inner_puzzle_hash KEYVAULT_MOD_HASH SINGLETON_STRUCT
+            OWNER_PUBKEY              ; owner stays the same
+            (f args)                  ; new_backups_merkle_root
+            (f (r args))              ; new_backup_count
+            (f (r (r args)))          ; new_cid_hash (latest)
+          )
+          my_amount
+          (list
+            (new_inner_puzzle_hash KEYVAULT_MOD_HASH SINGLETON_STRUCT
+              OWNER_PUBKEY (f args) (f (r args)) (f (r (r args)))
+            )
+          )
+        )
+        (c
+          ;; Announce the update for observers
+          (list CREATE_PUZZLE_ANNOUNCEMENT
+            (sha256tree (list SPEND_UPDATE (f (r args)) (f (r (r args)))))
+          )
+          conditions_so_far
+        )
+      )
+    )
+  )
+
+  ;; SPEND_TRANSFER: Change owner pubkey (key rotation)
+  ;; Requires CURRENT owner BLS signature
+  ;; args = (new_owner_pubkey)
+  (defun spend_transfer (KEYVAULT_MOD_HASH SINGLETON_STRUCT OWNER_PUBKEY BACKUPS_MERKLE_ROOT BACKUP_COUNT LATEST_CID_HASH
+                          my_id my_amount my_inner_puzzlehash args conditions_so_far)
+    (c
+      ;; Require current owner signature
+      (list AGG_SIG_ME OWNER_PUBKEY (sha256 my_id (f args)))
+      (c
+        ;; Recreate singleton with new owner
+        (list CREATE_COIN
+          (new_inner_puzzle_hash KEYVAULT_MOD_HASH SINGLETON_STRUCT
+            (f args)                  ; new_owner_pubkey
+            BACKUPS_MERKLE_ROOT       ; backups stay the same
+            BACKUP_COUNT
+            LATEST_CID_HASH
+          )
+          my_amount
+          (list
+            (new_inner_puzzle_hash KEYVAULT_MOD_HASH SINGLETON_STRUCT
+              (f args) BACKUPS_MERKLE_ROOT BACKUP_COUNT LATEST_CID_HASH
+            )
+          )
+        )
+        (c
+          ;; Announce the transfer
+          (list CREATE_PUZZLE_ANNOUNCEMENT
+            (sha256tree (list SPEND_TRANSFER (f args)))
+          )
+          conditions_so_far
+        )
+      )
+    )
+  )
+
+  ;; SPEND_VAULT: Authorize spending p2_keyvault coins (vault withdrawal)
+  ;; Requires owner BLS signature over (my_id, sha256tree(args))
+  ;; args = list of (p2_coin_id, delegated_puzzle_hash) pairs
+  ;; For each pair, creates a puzzle announcement that the p2_keyvault coin
+  ;; will assert to verify authorization.
+  (defun make_vault_announcements (authorized_spends rest)
+    (if authorized_spends
+      (c
+        (list CREATE_PUZZLE_ANNOUNCEMENT
+          (sha256 (f (f authorized_spends)) (f (r (f authorized_spends))))
+        )
+        (make_vault_announcements (r authorized_spends) rest)
+      )
+      rest
+    )
+  )
+
+  (defun spend_vault_funds (KEYVAULT_MOD_HASH SINGLETON_STRUCT OWNER_PUBKEY BACKUPS_MERKLE_ROOT BACKUP_COUNT LATEST_CID_HASH
+                            my_id my_amount my_inner_puzzlehash args conditions_so_far)
+    (c
+      ;; Require owner signature over authorized spends
+      (list AGG_SIG_ME OWNER_PUBKEY (sha256 my_id (sha256tree args)))
+      (c
+        ;; Recreate singleton unchanged (vault spend doesn't alter backup state)
+        (list CREATE_COIN my_inner_puzzlehash my_amount (list my_inner_puzzlehash))
+        ;; Create puzzle announcements for each authorized p2 coin spend
+        (make_vault_announcements args conditions_so_far)
+      )
+    )
+  )
+
+  ;; SPEND_ANNOUNCE: Read-only state announcement (no state change)
+  ;; No signature required — anyone can trigger this to read the state
+  ;; args = ()
+  (defun spend_announce (KEYVAULT_MOD_HASH SINGLETON_STRUCT OWNER_PUBKEY BACKUPS_MERKLE_ROOT BACKUP_COUNT LATEST_CID_HASH
+                          my_id my_amount my_inner_puzzlehash conditions_so_far)
+    (c
+      ;; Recreate myself unchanged
+      (list CREATE_COIN my_inner_puzzlehash my_amount (list my_inner_puzzlehash))
+      (c
+        ;; Announce full state for observers/recovery
+        (list CREATE_PUZZLE_ANNOUNCEMENT
+          (sha256tree (list SPEND_ANNOUNCE OWNER_PUBKEY BACKUPS_MERKLE_ROOT BACKUP_COUNT LATEST_CID_HASH))
+        )
+        conditions_so_far
+      )
+    )
+  )
+
+  ;; Main dispatch
+  (defun main (KEYVAULT_MOD_HASH SINGLETON_STRUCT OWNER_PUBKEY BACKUPS_MERKLE_ROOT BACKUP_COUNT LATEST_CID_HASH
+               my_id my_inner_puzzlehash my_amount spend_case args)
+    (if (= spend_case SPEND_UPDATE)
+      (spend_update KEYVAULT_MOD_HASH SINGLETON_STRUCT OWNER_PUBKEY
+        my_id my_amount my_inner_puzzlehash args
+        (base_conditions SINGLETON_STRUCT my_id my_amount my_inner_puzzlehash))
+
+      (if (= spend_case SPEND_TRANSFER)
+        (spend_transfer KEYVAULT_MOD_HASH SINGLETON_STRUCT OWNER_PUBKEY BACKUPS_MERKLE_ROOT BACKUP_COUNT LATEST_CID_HASH
+          my_id my_amount my_inner_puzzlehash args
+          (base_conditions SINGLETON_STRUCT my_id my_amount my_inner_puzzlehash))
+
+        (if (= spend_case SPEND_VAULT)
+          (spend_vault_funds KEYVAULT_MOD_HASH SINGLETON_STRUCT OWNER_PUBKEY BACKUPS_MERKLE_ROOT BACKUP_COUNT LATEST_CID_HASH
+            my_id my_amount my_inner_puzzlehash args
+            (base_conditions SINGLETON_STRUCT my_id my_amount my_inner_puzzlehash))
+
+          (if (= spend_case SPEND_ANNOUNCE)
+            (spend_announce KEYVAULT_MOD_HASH SINGLETON_STRUCT OWNER_PUBKEY BACKUPS_MERKLE_ROOT BACKUP_COUNT LATEST_CID_HASH
+              my_id my_amount my_inner_puzzlehash
+              (base_conditions SINGLETON_STRUCT my_id my_amount my_inner_puzzlehash))
+
+            (x "UNKNOWN SPEND CASE")
+          )
+        )
+      )
+    )
+  )
+
+  ;; Entry point
+  (main KEYVAULT_MOD_HASH SINGLETON_STRUCT OWNER_PUBKEY BACKUPS_MERKLE_ROOT BACKUP_COUNT LATEST_CID_HASH
+        my_id my_inner_puzzlehash my_amount spend_case args)
+)
