@@ -9,7 +9,6 @@ const { buildOpenApiSpec } = require('./spec');
 const FAVICON_SVG = fs.readFileSync(path.join(__dirname, 'favicon.svg'), 'utf8');
 
 function mountApiDocs(app) {
-  const spec = buildOpenApiSpec();
   const opts = {
     customSiteTitle: 'PinkSurfing Wallet API',
     customfavIcon: '/api-docs/favicon.svg',
@@ -19,6 +18,7 @@ function mountApiDocs(app) {
       .swagger-ui .info .title { color: #c084fc; }
     `,
     swaggerOptions: {
+      url: '/api-docs.json',
       persistAuthorization: true,
       displayRequestDuration: true,
       filter: true,
@@ -34,14 +34,21 @@ function mountApiDocs(app) {
 
   app.get('/api-docs.json', (_req, res) => {
     res.setHeader('Content-Type', 'application/json');
-    res.setHeader('Cache-Control', 'no-store');
-    res.send(spec);
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.send(buildOpenApiSpec());
   });
 
-  app.use('/api-docs', (_req, res, next) => {
-    res.setHeader('Cache-Control', 'no-store');
-    next();
-  }, swaggerUi.serve, swaggerUi.setup(spec, opts));
+  app.use(
+    '/api-docs',
+    (_req, res, next) => {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      next();
+    },
+    swaggerUi.serve,
+    swaggerUi.setup(undefined, opts),
+  );
 }
 
 module.exports = { mountApiDocs, buildOpenApiSpec };
