@@ -45,6 +45,14 @@ export class ProxyService {
     });
   }
 
+  /** Swagger UI at /api-docs — no /api/wallet prefix strip */
+  createWalletDocsProxy(): RequestHandler {
+    return createProxyMiddleware({
+      target: this.config.get<string>('walletApiUrl'),
+      changeOrigin: true,
+    });
+  }
+
   createAdminProxy(): RequestHandler {
     return createProxyMiddleware({
       target: this.config.get<string>('adminApiUrl'),
