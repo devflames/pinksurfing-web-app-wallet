@@ -11,9 +11,11 @@ app.pinksurfing.com {
 	@legacyDocs path_regexp legacy ^/api/wallet/api-docs(.*)$
 	redir @legacyDocs /api-docs{re.legacy.1} permanent
 
-	# Wallet Swagger UI — gateway proxies /api-docs* → wallet :3099
+	# Wallet Swagger UI — gateway proxies /api-docs* → wallet :3099 (never cache)
 	@docs path /api-docs /api-docs/* /api-docs.json
 	handle @docs {
+		header Cache-Control "no-store, no-cache, must-revalidate"
+		header Pragma "no-cache"
 		reverse_proxy 127.0.0.1:8080
 	}
 

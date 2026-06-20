@@ -7,8 +7,10 @@ const swaggerUi = require('swagger-ui-express');
 const { buildOpenApiSpec } = require('./spec');
 
 const FAVICON_SVG = fs.readFileSync(path.join(__dirname, 'favicon.svg'), 'utf8');
+const SPEC_CACHE_BUST = 'v=4';
 
 function mountApiDocs(app) {
+  const specUrl = `/api-docs.json?${SPEC_CACHE_BUST}`;
   const opts = {
     customSiteTitle: 'PinkSurfing Wallet API',
     customfavIcon: '/api-docs/favicon.svg',
@@ -18,7 +20,7 @@ function mountApiDocs(app) {
       .swagger-ui .info .title { color: #c084fc; }
     `,
     swaggerOptions: {
-      url: '/api-docs.json',
+      url: specUrl,
       persistAuthorization: true,
       displayRequestDuration: true,
       filter: true,

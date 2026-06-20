@@ -52,7 +52,7 @@ function buildOpenApiSpec() {
         '',
         '**Production:** proxied at `https://app.pinksurfing.com/api/wallet/*` via NestJS gateway.',
         '',
-        '**App API** (chat, PayChat channels, mobile profile): [coreapi.pinksurfing.com/api-docs/](https://coreapi.pinksurfing.com/api-docs/)',
+        '**Related docs:** [Chat & mobile API](https://coreapi.pinksurfing.com/api-docs/)',
         '',
         '**Auth:** Mutating routes use Ed25519 headers (`X-Auth-Address`, `X-Auth-Timestamp`, `X-Auth-Signature`).',
         'Signature covers `<timestamp>:<nonce>:<METHOD>:<path>` (router path, e.g. `/create` not `/swaps/create`).',
