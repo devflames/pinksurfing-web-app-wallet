@@ -42,4 +42,5 @@ pm2 start ecosystem.config.cjs
 pm2 save
 
 sleep 3
+sed -i 's/\r$//' "$ROOT"/scripts/*.sh 2>/dev/null || true
 bash "$ROOT/scripts/verify.sh"
