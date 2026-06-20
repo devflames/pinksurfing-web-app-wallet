@@ -1,5 +1,5 @@
 /**
- * Swagger UI for Matt wallet API — /api-docs and /api-docs.json
+ * Swagger UI for wallet API — /api-docs and /api-docs.json
  */
 const fs = require('fs');
 const path = require('path');
@@ -34,10 +34,14 @@ function mountApiDocs(app) {
 
   app.get('/api-docs.json', (_req, res) => {
     res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Cache-Control', 'no-store');
     res.send(spec);
   });
 
-  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(spec, opts));
+  app.use('/api-docs', (_req, res, next) => {
+    res.setHeader('Cache-Control', 'no-store');
+    next();
+  }, swaggerUi.serve, swaggerUi.setup(spec, opts));
 }
 
 module.exports = { mountApiDocs, buildOpenApiSpec };

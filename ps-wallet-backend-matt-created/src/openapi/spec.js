@@ -1,5 +1,5 @@
 /**
- * OpenAPI 3.0 spec for ps-wallet-backend (Matt).
+ * OpenAPI 3.0 spec for ps-wallet-backend.
  * Served at GET /api-docs (Swagger UI) and GET /api-docs.json
  */
 
