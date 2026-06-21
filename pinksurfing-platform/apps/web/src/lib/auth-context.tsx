@@ -73,7 +73,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       process.env.NEXT_PUBLIC_SSO_GOOGLE_START_URL ||
       (typeof window !== 'undefined' &&
       process.env.NEXT_PUBLIC_AUTH_MODE === 'production'
-        ? `${window.location.origin.replace(/\/$/, '')}/api/auth/google/`
+        ? 'https://auth.pinksurfing.com/api/auth/google/'
         : '');
     if (ssoStart) {
       const next = `${window.location.origin}${withBasePath('/auth/google/complete')}`;

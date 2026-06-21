@@ -11,6 +11,12 @@ app.pinksurfing.com {
 	@legacyDocs path_regexp legacy ^/api/wallet/api-docs(.*)$
 	redir @legacyDocs /api-docs{re.legacy.1} permanent
 
+	# Next.js auth routes (login, OAuth bootstrap) — NOT the Nest gateway
+	@webApi path /api/auth/* /api/dev-token
+	handle @webApi {
+		reverse_proxy 127.0.0.1:3000
+	}
+
 	# Wallet Swagger UI — gateway proxies /api-docs* → wallet :3099 (never cache)
 	@docs path /api-docs /api-docs/* /api-docs.json
 	handle @docs {
@@ -19,6 +25,7 @@ app.pinksurfing.com {
 		reverse_proxy 127.0.0.1:8080
 	}
 
+	# Gateway — Raihan proxy, wallet proxy, admin
 	handle /api/* {
 		reverse_proxy 127.0.0.1:8080
 	}

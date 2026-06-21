@@ -63,6 +63,8 @@ append_default "$WALLET_ENV" "CORS_ORIGINS" "https://${DOMAIN}"
 append_default "$WALLET_ENV" "GOOGLE_REDIRECT_URI" "https://${DOMAIN}/api/wallet/auth/google/callback"
 append_default "$WALLET_ENV" "IPFS_PROVIDER" "pinata"
 
+append_default "$WEB_ENV" "NEXT_PUBLIC_SSO_GOOGLE_START_URL" "https://auth.pinksurfing.com/api/auth/google/"
+
 echo ""
 echo "Live flags (web): WALLET_LIVE, CHAT_LIVE, CONTRACTS_LIVE = true"
 echo ""

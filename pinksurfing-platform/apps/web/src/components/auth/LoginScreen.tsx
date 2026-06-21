@@ -180,10 +180,6 @@ function ProductionLoginForm({
         </>
       )}
 
-      <p className="text-[9px] text-[var(--ps-amber)]">
-        Production SSO — same JWT for email and Google once auth service is updated.
-      </p>
-
       <form onSubmit={onSubmit} className="space-y-3">
         <div>
           <label className="mb-1 block text-[10px] text-[var(--ps-dim)]">Email</label>
