@@ -2,6 +2,7 @@ import type { SessionUser } from './types/user';
 
 export type AuthTokenResponse = {
   access?: string;
+  refresh?: string;
   message?: string;
   details?: string;
 };
@@ -43,6 +44,14 @@ function authTokenUrl(): string {
   return process.env.AUTH_TOKEN_URL || 'https://auth.pinksurfing.com/api/token/';
 }
 
+function authRefreshUrl(): string {
+  const tokenUrl = authTokenUrl();
+  if (tokenUrl.includes('/token/')) {
+    return tokenUrl.replace(/\/token\/?$/, '/token/refresh/');
+  }
+  return 'https://auth.pinksurfing.com/api/token/refresh/';
+}
+
 function authGoogleTokenUrl(): string {
   return (
     process.env.AUTH_GOOGLE_TOKEN_URL ||
@@ -82,7 +91,10 @@ export function isProductionAuthMode(): boolean {
   );
 }
 
-export async function fetchPasswordSsoToken(email: string, password: string): Promise<string> {
+export async function fetchPasswordSsoToken(
+  email: string,
+  password: string
+): Promise<{ access: string; refresh?: string }> {
   const authRes = await fetch(authTokenUrl(), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -107,7 +119,37 @@ export async function fetchPasswordSsoToken(email: string, password: string): Pr
     throw new SsoLoginError('Invalid email or password', 401);
   }
 
-  return access;
+  return { access, refresh: authBody.refresh };
+}
+
+export async function refreshSsoAccessToken(
+  refresh: string | undefined,
+  cookieHeader?: string | null
+): Promise<{ access: string; refresh?: string }> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (cookieHeader) headers.Cookie = cookieHeader;
+
+  const authRes = await fetch(authRefreshUrl(), {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(refresh ? { refresh } : {}),
+  });
+
+  const authBody = (await authRes.json().catch(() => ({}))) as AuthTokenResponse;
+
+  if (!authRes.ok) {
+    throw new SsoLoginError(
+      authBody.message || authBody.details || `Token refresh failed (${authRes.status})`,
+      authRes.status
+    );
+  }
+
+  const access = authBody.access;
+  if (!access) {
+    throw new SsoLoginError('Token refresh returned no access token', 401);
+  }
+
+  return { access, refresh: authBody.refresh };
 }
 
 export async function fetchGoogleSsoToken(idToken: string): Promise<string> {
@@ -216,11 +258,13 @@ export async function syncRaihanUser(
 
 export async function completeSsoSession(
   access: string,
-  emailFallback: string
-): Promise<{ token: string; user: SessionUser }> {
+  emailFallback: string,
+  refresh?: string
+): Promise<{ token: string; refresh?: string; user: SessionUser }> {
   const user = await syncRaihanUser(access, emailFallback);
   return {
     token: access,
+    refresh,
     user: { ...user, mode: 'sso' },
   };
 }

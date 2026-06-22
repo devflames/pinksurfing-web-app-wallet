@@ -7,6 +7,7 @@ const swaggerUi = require('swagger-ui-express');
 const { buildOpenApiSpec } = require('./spec');
 
 const FAVICON_SVG = fs.readFileSync(path.join(__dirname, 'favicon.svg'), 'utf8');
+
 const SPEC_CACHE_BUST = 'v=4';
 
 function mountApiDocs(app) {

@@ -27,11 +27,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: 'Email and password are required' }, { status: 400 });
     }
 
-    const access = await fetchPasswordSsoToken(email, password);
-    const session = await completeSsoSession(access, email.trim());
+    const { access, refresh } = await fetchPasswordSsoToken(email, password);
+    const session = await completeSsoSession(access, email.trim(), refresh);
 
     return NextResponse.json({
       token: session.token,
+      refresh: session.refresh,
       user: session.user,
     });
   } catch (e) {

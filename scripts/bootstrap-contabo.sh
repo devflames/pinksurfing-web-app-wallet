@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env bash
+#!/usr/bin/env bash
 set -euo pipefail
 [ "$(id -u)" -eq 0 ] || { echo "Run as root on VPS"; exit 1; }
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
