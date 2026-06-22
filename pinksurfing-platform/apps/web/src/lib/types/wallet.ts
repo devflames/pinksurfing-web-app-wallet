@@ -54,6 +54,16 @@ export interface WalletHealth {
   };
 }
 
+export interface WalletProvisionStatus {
+  status: string;
+  provisioned: boolean;
+  chiaAddress?: string;
+  walletPk?: string;
+  launcherId?: string | null;
+  email?: string | null;
+  linkedAt?: string;
+}
+
 export interface KeyVaultLookup {
   success: boolean;
   launcherId?: string;

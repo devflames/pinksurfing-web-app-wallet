@@ -3,6 +3,7 @@
 import dynamic from 'next/dynamic';
 import { useAuth } from '@/lib/auth-context';
 import { LoginScreen } from '@/components/auth/LoginScreen';
+import { WalletProvisionGate } from '@/components/wallet/WalletProvisionGate';
 
 const AppShell = dynamic(
   () => import('@/components/shell/AppShell').then((m) => ({ default: m.AppShell })),
@@ -37,7 +38,9 @@ export function AuthGate() {
   return (
     <div className="ps-app-bg flex min-h-screen justify-center p-3 sm:p-4">
       <div className="flex w-full max-w-6xl flex-1 flex-col">
-        <AppShell />
+        <WalletProvisionGate>
+          <AppShell />
+        </WalletProvisionGate>
       </div>
     </div>
   );

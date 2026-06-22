@@ -21,6 +21,10 @@ module.exports = {
         PORT: '3099',
         KEYVAULT_PYTHON_URL: 'http://127.0.0.1:5002',
         CORS_ORIGINS: 'https://app.pinksurfing.com',
+        // Must match SSO JWT_SIGNING_KEY — set in ps-wallet .env on VPS
+        // JWT_SIGNING_KEY: '...',
+        JWT_ISSUER: 'https://auth.pinksurfing.com',
+        JWT_AUDIENCE: 'pinksurfing',
       },
     },
     {

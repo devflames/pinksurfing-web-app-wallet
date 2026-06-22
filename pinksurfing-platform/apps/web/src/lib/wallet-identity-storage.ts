@@ -2,6 +2,7 @@
 
 export type WalletIdentity = {
   chiaAddress: string;
+  walletPk?: string;
   btcPubkey?: string;
 };
 
@@ -20,6 +21,7 @@ export function loadWalletIdentity(email: string | undefined | null): WalletIden
     if (!parsed?.chiaAddress?.trim()) return null;
     return {
       chiaAddress: parsed.chiaAddress.trim(),
+      walletPk: parsed.walletPk?.trim() || undefined,
       btcPubkey: parsed.btcPubkey?.trim() || undefined,
     };
   } catch {
@@ -33,6 +35,7 @@ export function saveWalletIdentity(email: string, identity: WalletIdentity): voi
     storageKey(email),
     JSON.stringify({
       chiaAddress: identity.chiaAddress.trim(),
+      walletPk: identity.walletPk?.trim() || '',
       btcPubkey: identity.btcPubkey?.trim() || '',
     })
   );

@@ -427,4 +427,20 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_files_expires ON encrypted_files(expires_at);
 `);
 
+// SSO user ↔ wallet link (non-custodial — server stores address mapping only)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS sso_wallet_links (
+    sso_user_id TEXT PRIMARY KEY,
+    email TEXT,
+    chia_address TEXT NOT NULL,
+    wallet_pk TEXT NOT NULL,
+    launcher_id TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_sso_wallet_links_email ON sso_wallet_links(email);
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_sso_wallet_links_chia ON sso_wallet_links(chia_address);
+`);
+
 module.exports = db;

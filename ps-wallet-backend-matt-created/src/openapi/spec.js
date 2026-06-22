@@ -21,7 +21,13 @@ function op(method, path, tag, summary, opts = {}) {
         tags: [tag],
         summary,
         description: opts.description,
-        security: opts.auth ? [{ Ed25519Auth: [] }] : opts.public ? [] : undefined,
+        security: opts.sso
+          ? [{ SsoBearer: [] }]
+          : opts.auth
+            ? [{ Ed25519Auth: [] }]
+            : opts.public
+              ? []
+              : undefined,
         parameters: opts.params,
         requestBody: opts.body,
         responses: opts.responses || {
@@ -56,6 +62,8 @@ function buildOpenApiSpec() {
         '',
         '**Auth:** Mutating routes use Ed25519 headers (`X-Auth-Address`, `X-Auth-Timestamp`, `X-Auth-Signature`).',
         'Signature covers `<timestamp>:<nonce>:<METHOD>:<path>` (router path, e.g. `/create` not `/swaps/create`).',
+        '',
+        '**SSO provisioning:** `GET /wallet/status` and `POST /wallet/link` use `Authorization: Bearer <SSO access JWT>`.',
       ].join('\n'),
       contact: { name: 'PinkSurfing wallet team' },
     },
@@ -71,6 +79,7 @@ function buildOpenApiSpec() {
       { name: 'Auth', description: 'Google OAuth for Drive backup' },
       { name: 'Email Auth', description: 'Email OTP sessions' },
       { name: 'Wallet / NFT', description: 'Chia profile NFT inscriptions' },
+      { name: 'Wallet provision', description: 'SSO user ↔ wallet link (status + link)' },
       { name: 'Messages', description: 'E2E encrypted message relay' },
       { name: 'Recovery', description: 'Split-key MFA recovery' },
       { name: 'PayChat', description: 'Chia PayChat offers' },
@@ -92,6 +101,12 @@ function buildOpenApiSpec() {
           in: 'header',
           name: 'X-Session-Token',
           description: 'Email OTP session token',
+        },
+        SsoBearer: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+          description: 'PinkSurfing SSO access token (HS256, shared JWT_SIGNING_KEY)',
         },
       },
     },
@@ -172,6 +187,39 @@ function buildOpenApiSpec() {
       op('get', '/auth/google/status', 'Auth', 'OAuth config status', { public: true }),
       op('post', '/auth/email/send-otp', 'Email Auth', 'Send email OTP', { public: true }),
       op('post', '/auth/email/verify-otp', 'Email Auth', 'Verify OTP → session token', { public: true }),
+      op('get', '/wallet/status', 'Wallet provision', 'SSO wallet provision status', {
+        sso: true,
+        description: 'Returns whether the authenticated SSO user has a linked Chia wallet.',
+        responses: {
+          200: { description: '{ provisioned: boolean, chiaAddress?, launcherId? }' },
+          401: { description: 'Invalid or missing SSO JWT' },
+        },
+      }),
+      op('post', '/wallet/link', 'Wallet provision', 'Link SSO user to wallet address', {
+        sso: true,
+        description: 'Associates SSO user_id with chiaAddress + walletPk. Keys remain client-side.',
+        body: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['chiaAddress', 'walletPk'],
+                properties: {
+                  chiaAddress: { type: 'string' },
+                  walletPk: { type: 'string', description: 'Wallet Ed25519 public key (hex)' },
+                  launcherId: { type: 'string', description: 'Optional KeyVault launcher ID' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Wallet linked' },
+          401: { description: 'Invalid SSO JWT' },
+          409: { description: 'Address linked to another account' },
+        },
+      }),
       op('get', '/wallet/chain-status', 'Wallet / NFT', 'Chia node sync status', { public: true }),
       op('post', '/wallet/inscribe-profile', 'Wallet / NFT', 'Mint profile NFT'),
       op('get', '/wallet/profile/{address}', 'Wallet / NFT', 'Latest profile NFT', {

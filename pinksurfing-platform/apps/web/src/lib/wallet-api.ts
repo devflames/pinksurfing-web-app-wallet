@@ -1,5 +1,11 @@
 import { getWalletBase } from './api-client';
-import type { AtomicSwap, KeyVaultLookup, KeyVaultStatus, WalletHealth } from './types/wallet';
+import type {
+  AtomicSwap,
+  KeyVaultLookup,
+  KeyVaultStatus,
+  WalletHealth,
+  WalletProvisionStatus,
+} from './types/wallet';
 
 const base = () => getWalletBase();
 
@@ -28,6 +34,33 @@ export async function fetchWalletInfo(): Promise<WalletHealth> {
     keyvault = undefined;
   }
   return { ...info, keyvault };
+}
+
+function authHeaders(token: string): Record<string, string> {
+  return { Authorization: `Bearer ${token}` };
+}
+
+export async function fetchWalletStatus(token: string): Promise<WalletProvisionStatus> {
+  return walletFetch<WalletProvisionStatus>(`${base()}/wallet/status`, {
+    headers: authHeaders(token),
+  });
+}
+
+export type LinkWalletPayload = {
+  chiaAddress: string;
+  walletPk: string;
+  launcherId?: string;
+};
+
+export async function linkWalletToSso(
+  token: string,
+  payload: LinkWalletPayload
+): Promise<WalletProvisionStatus> {
+  return walletFetch<WalletProvisionStatus>(`${base()}/wallet/link`, {
+    method: 'POST',
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function fetchOpenSwaps(limit = 20): Promise<AtomicSwap[]> {

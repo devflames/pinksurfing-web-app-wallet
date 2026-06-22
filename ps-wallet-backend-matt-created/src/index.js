@@ -30,6 +30,7 @@ const groupRoutes = require('./routes/groups');
 const didRoutes = require('./routes/did');
 const paychatRoutes = require('./routes/paychat');
 const fileRoutes = require('./routes/files');
+const walletProvisionRoutes = require('./routes/wallet-provision');
 const { mountApiDocs } = require('./openapi/setup-api-docs');
 
 const app = express();
@@ -72,6 +73,7 @@ app.use((req, res, next) => {
 // Routes
 app.use('/auth', authRoutes);
 app.use('/auth/email', emailAuthRoutes);
+app.use('/wallet', walletProvisionRoutes);
 app.use('/wallet', inscriptionRoutes);
 app.use('/profiles', profileRoutes);
 app.use('/messages', messageRoutes);
@@ -109,6 +111,8 @@ app.get('/', (req, res) => {
         'POST /auth/email/logout': 'Destroy session',
       },
       wallet: {
+        'GET /wallet/status': 'SSO JWT — wallet provision status',
+        'POST /wallet/link': 'SSO JWT — link user to Chia address',
         'POST /wallet/auto-mint-profile': 'First login: avatar + metadata → IPFS → NFT',
         'POST /wallet/pin-image': 'Pin image to IPFS, get CID',
         'POST /wallet/inscribe-profile': 'Pin image+metadata to IPFS + mint NFT',
