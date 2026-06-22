@@ -63,6 +63,43 @@ export async function linkWalletToSso(
   });
 }
 
+export type KeyVaultAutoCreateResult = {
+  success: boolean;
+  launcherId?: string;
+  ipfsCid?: string;
+  deployPending?: boolean;
+  message?: string;
+};
+
+export async function createKeyVaultAuto(payload: {
+  ownerPubkeyHex: string;
+  encryptedBackup: string;
+  walletAddress: string;
+}): Promise<KeyVaultAutoCreateResult> {
+  const res = await fetch(`${base()}/keyvault/create-auto`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return (await res.json().catch(() => ({}))) as KeyVaultAutoCreateResult;
+}
+
+export async function registerWalletProfile(
+  body: {
+    chiaAddress: string;
+    walletPk: string;
+    displayName?: string;
+    profileData: Record<string, unknown>;
+  },
+  ed25519Headers: Record<string, string>
+): Promise<void> {
+  await walletFetch(`${base()}/profiles/register`, {
+    method: 'POST',
+    headers: ed25519Headers,
+    body: JSON.stringify(body),
+  });
+}
+
 export async function fetchOpenSwaps(limit = 20): Promise<AtomicSwap[]> {
   const res = await walletFetch<{ status: string; data?: AtomicSwap[] }>(
     `${base()}/swaps/open?limit=${limit}`

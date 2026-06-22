@@ -44,7 +44,7 @@ export function BtcSwapView({
       return;
     }
     if (!chiaAddress.trim()) {
-      setStatus('Add your Chia address under Me → Your wallet first.');
+      setStatus('Add your wallet address under Me → Your wallet first.');
       return;
     }
     setBusy(true);
@@ -75,7 +75,7 @@ export function BtcSwapView({
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-3">
       <div className="mb-1 text-sm font-medium text-[var(--ps-white)]">Atomic swap → Bitcoin</div>
       <p className="mb-3.5 text-[11px] leading-relaxed text-[var(--ps-muted)]">
-        Swap vault balance to BTC using a submarine atomic swap. Funds lock in Chia/Bitcoin HTLC
+        Swap vault balance to BTC using a submarine atomic swap. Funds lock in on-chain smart contracts
         smart contracts — PinkSurfing does not hold custody (not traditional escrow).
       </p>
 

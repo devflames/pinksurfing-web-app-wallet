@@ -121,7 +121,7 @@ export function WalletIdentityCard({
                 Your wallet
               </h3>
               <p className={`mt-0.5 text-[var(--ps-dim)] ${isFull ? 'text-[10px]' : 'text-[9px]'}`}>
-                Non-custodial — vaults &amp; swaps use Chia HTLC smart contracts, not escrow custody.
+                Non-custodial — your balance and transfers use on-chain smart contracts, not custodial escrow.
               </p>
             </div>
             {walletLive ? (
@@ -153,7 +153,7 @@ export function WalletIdentityCard({
               Your wallet
             </h3>
             <p className={`mt-0.5 text-[var(--ps-dim)] ${isFull ? 'text-[10px]' : 'text-[9px]'}`}>
-              Non-custodial — vaults &amp; swaps use Chia HTLC smart contracts, not escrow custody.
+              Non-custodial — your balance and transfers use on-chain smart contracts, not custodial escrow.
             </p>
           </div>
           {walletLive ? (
@@ -202,11 +202,11 @@ export function WalletIdentityCard({
       {showEdit && editing ? (
         <div className="space-y-2">
           <div>
-            <label className="mb-1 block text-[9px] text-[var(--ps-muted)]">Wallet address (xch1…)</label>
+            <label className="mb-1 block text-[9px] text-[var(--ps-muted)]">Wallet address</label>
             <input
               value={draftChia}
               onChange={(e) => setDraftChia(e.target.value)}
-              placeholder="xch1…"
+              placeholder="Your receive address"
               className="w-full rounded-lg border border-[var(--ps-brd)] bg-[var(--ps-surf)] px-2 py-2 text-[10px] text-[var(--ps-white)] outline-none focus:border-[var(--ps-cyan)]/40"
             />
           </div>
@@ -247,7 +247,7 @@ export function WalletIdentityCard({
               Wallet address
             </h4>
             <p className="mt-0.5 text-[9px] leading-snug text-[var(--ps-dim)]">
-              (chia address which transmits in XCH under the hood)
+              (receive address for PS Pay)
             </p>
 
             {chiaAddress ? (
@@ -262,7 +262,7 @@ export function WalletIdentityCard({
               </div>
             ) : (
               <p className="mt-2 text-[10px] text-[var(--ps-dim)]">
-                Add your wallet address to receive XCH and use KeyVault.
+                Add your wallet address to receive payments and use your secure vault.
               </p>
             )}
           </div>

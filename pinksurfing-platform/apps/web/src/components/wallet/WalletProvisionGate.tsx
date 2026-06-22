@@ -1,6 +1,6 @@
 'use client';
 
-import { WalletSetupScreen } from '@/components/wallet/WalletSetupScreen';
+import { WalletRestoreScreen, WalletSetupScreen } from '@/components/wallet/WalletSetupScreen';
 import { useWalletProvision } from '@/hooks/use-wallet-provision';
 
 type Props = {
@@ -8,7 +8,7 @@ type Props = {
 };
 
 export function WalletProvisionGate({ children }: Props) {
-  const { loading, error, provisioned, refresh } = useWalletProvision();
+  const { loading, error, phase, refresh } = useWalletProvision();
 
   if (loading) {
     return (
@@ -35,9 +35,21 @@ export function WalletProvisionGate({ children }: Props) {
     );
   }
 
-  if (!provisioned) {
-    return <WalletSetupScreen onLinked={refresh} />;
+  if (phase === 'setup') {
+    return <WalletSetupScreen onComplete={refresh} />;
   }
 
-  return <>{children}</>;
+  if (phase === 'restore') {
+    return <WalletRestoreScreen onComplete={refresh} />;
+  }
+
+  if (phase === 'ready') {
+    return <>{children}</>;
+  }
+
+  return (
+    <div className="flex min-h-screen items-center justify-center p-4">
+      <p className="text-sm text-[var(--ps-muted)]">Loading wallet…</p>
+    </div>
+  );
 }
