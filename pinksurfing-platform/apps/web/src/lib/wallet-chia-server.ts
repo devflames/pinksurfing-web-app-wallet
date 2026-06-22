@@ -70,5 +70,5 @@ export function chiaAddressFromWalletPk(
   const puzzle = getPuzzles().payToDelegatedOrHidden.curry([
     Program.fromJacobianPoint(syntheticPublicKey),
   ]);
-  return bech32m.encode(prefix, puzzle.hash());
+  return bech32m.encodeFromBytes(prefix, puzzle.hash());
 }
