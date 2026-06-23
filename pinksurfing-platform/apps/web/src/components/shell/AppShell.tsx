@@ -87,7 +87,8 @@ import {
   type SavedContact,
 } from '@/lib/saved-contacts';
 
-import { joinContactViaQr, paychatInviteCodeForUser, registerUserPaychatQr } from '@/lib/qr-invite';
+import { joinContactViaQr, paychatInviteCodeForUser, registerUserPaychatQr, registerUserBusinessQr, consumePendingQrJoin, consumeQrJoinResult } from '@/lib/qr-invite';
+import { executeQrJoin } from '@/lib/qr-join-service';
 import type { BusinessCardSnapshot } from '@/lib/business-card-types';
 import {
   businessAvatarRing,
@@ -416,6 +417,7 @@ export function AppShell() {
       displayName(user),
       paychatSettings.accepting ? paychatPriceForStep(paychatSettings.step) : undefined
     );
+    registerUserBusinessQr(user, displayName(user));
   }, [user, paychatSettings.step, paychatSettings.accepting]);
 
   useEffect(() => {
@@ -576,20 +578,51 @@ export function AppShell() {
     setShowQrModal(true);
   };
 
+  const completeQrJoin = useCallback(
+    (kind: 'business' | 'paychat', contactId: string) => {
+      refreshJoined();
+      if (kind === 'business') {
+        setSection('home');
+        setHomeTab('business');
+        setHomeActiveId(contactId);
+        joinContactViaQr('business', contactId);
+      } else {
+        setSection('paychat');
+        paychatSubTouched.current = true;
+        setPaychatSub('outgoing');
+        setPaychatActiveId(contactId);
+        joinContactViaQr('paychat', contactId);
+      }
+      setBusinessView('chat');
+    },
+    [refreshJoined]
+  );
+
   const handleQrJoin = (contactId: string) => {
-    refreshJoined();
-    if (qrModalKind === 'business') {
-      setHomeTab('business');
-      setHomeActiveId(contactId);
-      joinContactViaQr('business', contactId);
-    } else {
-      paychatSubTouched.current = true;
-      setPaychatSub('outgoing');
-      setPaychatActiveId(contactId);
-      joinContactViaQr('paychat', contactId);
-    }
-    setBusinessView('chat');
+    completeQrJoin(qrModalKind, contactId);
   };
+
+  useEffect(() => {
+    if (!user || !token) return;
+
+    const routed = consumeQrJoinResult();
+    if (routed) {
+      completeQrJoin(routed.kind, routed.contactId);
+      return;
+    }
+
+    const pending = consumePendingQrJoin();
+    if (!pending) return;
+
+    void executeQrJoin({
+      kind: pending.kind,
+      raw: pending.code,
+      token,
+      live: isChatLive(),
+    })
+      .then((entry) => completeQrJoin(pending.kind, entry.contactId))
+      .catch(() => {});
+  }, [user, token, completeQrJoin]);
 
   const selectTab = (next: ChatTab) => {
     if (section === 'paychat') return;
@@ -1338,6 +1371,7 @@ export function AppShell() {
           <QrJoinModal
             kind={qrModalKind}
             open={showQrModal && isChatSection}
+            token={token}
             onClose={() => setShowQrModal(false)}
             onJoin={handleQrJoin}
           />

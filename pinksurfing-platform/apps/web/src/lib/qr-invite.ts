@@ -1,5 +1,9 @@
 import { BUSINESS_QR_CODES, PAYCHAT_QR_CODES } from './demo-data';
 import {
+  dynamicBusinessContactId,
+  upsertDynamicBusinessContact,
+} from './dynamic-business-contacts';
+import {
   dynamicPaychatContactId,
   upsertDynamicPaychatContact,
 } from './dynamic-paychat-contacts';
@@ -13,6 +17,9 @@ const STORAGE: Record<QrJoinKind, string> = {
 };
 
 const PAYCHAT_REGISTRY_KEY = 'ps-paychat-qr-registry';
+const BUSINESS_REGISTRY_KEY = 'ps-business-qr-registry';
+const PENDING_JOIN_KEY = 'ps-pending-qr-join';
+const JOIN_RESULT_KEY = 'ps-qr-join-result';
 
 export type PaychatRegistryEntry = {
   userId: string;
@@ -20,6 +27,30 @@ export type PaychatRegistryEntry = {
   code: string;
   askUsd?: number;
 };
+
+export type BusinessRegistryEntry = {
+  userId: string;
+  name: string;
+  code: string;
+  email?: string;
+};
+
+export type PendingQrJoin = {
+  kind: QrJoinKind;
+  code: string;
+};
+
+export type QrJoinResult = {
+  kind: QrJoinKind;
+  contactId: string;
+};
+
+export function qrJoinBaseUrl(): string {
+  const origin = process.env.NEXT_PUBLIC_APP_ORIGIN?.trim();
+  if (origin) return origin.replace(/\/$/, '');
+  if (typeof window !== 'undefined') return window.location.origin;
+  return 'https://app.pinksurfing.com';
+}
 
 export function paychatInviteCodeForUser(user: SessionUser | null): string {
   if (user?.pspayId?.trim()) {
@@ -36,8 +67,43 @@ export function paychatInviteCodeForUser(user: SessionUser | null): string {
 
 export function businessInviteCodeForUser(user: SessionUser | null): string {
   const email = user?.email?.trim() ?? '';
-  if (email) return email.split('@')[0].toUpperCase().slice(0, 12);
+  if (email) return email.split('@')[0].toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12);
   return 'PS-DEMO';
+}
+
+export function normalizePaychatCode(code: string): string {
+  const upper = code.trim().toUpperCase();
+  return upper.startsWith('PS-') ? upper : `PS-${upper}`;
+}
+
+function loadPaychatRegistry(): PaychatRegistryEntry[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(PAYCHAT_REGISTRY_KEY);
+    return raw ? (JSON.parse(raw) as PaychatRegistryEntry[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function loadBusinessRegistry(): BusinessRegistryEntry[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(BUSINESS_REGISTRY_KEY);
+    return raw ? (JSON.parse(raw) as BusinessRegistryEntry[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function findPaychatRegistryEntry(code: string): PaychatRegistryEntry | null {
+  const key = normalizePaychatCode(code);
+  return loadPaychatRegistry().find((e) => e.code.toUpperCase() === key) ?? null;
+}
+
+export function findBusinessRegistryEntry(code: string): BusinessRegistryEntry | null {
+  const key = code.trim().toUpperCase();
+  return loadBusinessRegistry().find((e) => e.code.toUpperCase() === key) ?? null;
 }
 
 export function registerUserPaychatQr(
@@ -58,19 +124,26 @@ export function registerUserPaychatQr(
   return code;
 }
 
-function loadPaychatRegistry(): PaychatRegistryEntry[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    const raw = localStorage.getItem(PAYCHAT_REGISTRY_KEY);
-    return raw ? (JSON.parse(raw) as PaychatRegistryEntry[]) : [];
-  } catch {
-    return [];
-  }
+export function registerUserBusinessQr(
+  user: SessionUser | null,
+  displayName: string,
+  businessName?: string
+): string {
+  const code = businessInviteCodeForUser(user);
+  if (!user?.id || typeof window === 'undefined') return code;
+  const entry: BusinessRegistryEntry = {
+    userId: user.id,
+    name: businessName?.trim() || displayName,
+    code,
+    email: user.email,
+  };
+  const list = loadBusinessRegistry().filter((e) => e.userId !== user.id);
+  localStorage.setItem(BUSINESS_REGISTRY_KEY, JSON.stringify([...list, entry]));
+  return code;
 }
 
 function resolveRegistryPaychat(code: string): { contactId: string; label: string } | null {
-  const key = code.trim().toUpperCase();
-  const entry = loadPaychatRegistry().find((e) => e.code.toUpperCase() === key);
+  const entry = findPaychatRegistryEntry(code);
   if (!entry) return null;
   const contactId = dynamicPaychatContactId(entry.userId);
   upsertDynamicPaychatContact({
@@ -82,15 +155,30 @@ function resolveRegistryPaychat(code: string): { contactId: string; label: strin
   return { contactId, label: entry.name };
 }
 
+function resolveRegistryBusiness(code: string): { contactId: string; label: string } | null {
+  const entry = findBusinessRegistryEntry(code);
+  if (!entry) return null;
+  const contactId = dynamicBusinessContactId(entry.userId);
+  upsertDynamicBusinessContact({
+    id: contactId,
+    name: entry.name,
+    code: entry.code,
+    email: entry.email,
+  });
+  return { contactId, label: entry.name };
+}
+
 export function buildQrPayload(kind: QrJoinKind, code: string): string {
-  return `https://pinksurfing.com/join/${kind}/${encodeURIComponent(code.trim().toUpperCase())}`;
+  return `${qrJoinBaseUrl()}/join/${kind}/${encodeURIComponent(code.trim().toUpperCase())}`;
 }
 
 export function parseQrInput(raw: string): { kind: QrJoinKind; code: string } | null {
   const trimmed = raw.trim();
   if (!trimmed) return null;
 
-  const urlMatch = trimmed.match(/pinksurfing\.com\/join\/(business|paychat)\/([^/?#]+)/i);
+  const urlMatch = trimmed.match(
+    /(?:app\.)?pinksurfing\.com\/join\/(business|paychat)\/([^/?#]+)/i
+  );
   if (urlMatch) {
     return { kind: urlMatch[1] as QrJoinKind, code: decodeURIComponent(urlMatch[2]).toUpperCase() };
   }
@@ -103,9 +191,9 @@ export function parseQrInput(raw: string): { kind: QrJoinKind; code: string } | 
   const upper = trimmed.toUpperCase();
   if (BUSINESS_QR_CODES[upper]) return { kind: 'business', code: upper };
   if (PAYCHAT_QR_CODES[upper]) return { kind: 'paychat', code: upper };
-  if (loadPaychatRegistry().some((e) => e.code.toUpperCase() === upper)) {
-    return { kind: 'paychat', code: upper };
-  }
+  if (findPaychatRegistryEntry(upper)) return { kind: 'paychat', code: normalizePaychatCode(upper) };
+  if (findBusinessRegistryEntry(upper)) return { kind: 'business', code: upper };
+  if (upper.startsWith('PS-')) return { kind: 'paychat', code: upper };
 
   return null;
 }
@@ -114,11 +202,45 @@ export function resolveQrJoin(
   kind: QrJoinKind,
   code: string
 ): { contactId: string; label: string } | null {
-  const key = code.trim().toUpperCase();
+  const key = kind === 'paychat' ? normalizePaychatCode(code) : code.trim().toUpperCase();
   const map = kind === 'business' ? BUSINESS_QR_CODES : PAYCHAT_QR_CODES;
   if (map[key]) return map[key];
   if (kind === 'paychat') return resolveRegistryPaychat(key);
-  return null;
+  return resolveRegistryBusiness(key);
+}
+
+export function stashPendingQrJoin(kind: QrJoinKind, code: string): void {
+  if (typeof window === 'undefined') return;
+  sessionStorage.setItem(PENDING_JOIN_KEY, JSON.stringify({ kind, code }));
+}
+
+export function consumePendingQrJoin(): PendingQrJoin | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = sessionStorage.getItem(PENDING_JOIN_KEY);
+    if (!raw) return null;
+    sessionStorage.removeItem(PENDING_JOIN_KEY);
+    return JSON.parse(raw) as PendingQrJoin;
+  } catch {
+    return null;
+  }
+}
+
+export function stashQrJoinResult(result: QrJoinResult): void {
+  if (typeof window === 'undefined') return;
+  sessionStorage.setItem(JOIN_RESULT_KEY, JSON.stringify(result));
+}
+
+export function consumeQrJoinResult(): QrJoinResult | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = sessionStorage.getItem(JOIN_RESULT_KEY);
+    if (!raw) return null;
+    sessionStorage.removeItem(JOIN_RESULT_KEY);
+    return JSON.parse(raw) as QrJoinResult;
+  } catch {
+    return null;
+  }
 }
 
 export function getJoinedContactIds(kind: QrJoinKind): string[] {

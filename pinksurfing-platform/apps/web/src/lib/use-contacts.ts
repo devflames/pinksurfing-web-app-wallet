@@ -7,6 +7,10 @@ import {
   dynamicContactToUi,
   loadDynamicPaychatContacts,
 } from './dynamic-paychat-contacts';
+import {
+  dynamicBusinessContactToUi,
+  loadDynamicBusinessContacts,
+} from './dynamic-business-contacts';
 import { fetchContactList, isChatLive } from './chat-api';
 
 export type ChatSection = 'home' | 'paychat';
@@ -46,14 +50,32 @@ export function useContacts(token: string | null) {
   const getContactsForTab = useCallback(
     (tab: ChatTab): Contact[] => {
       if (live && apiContacts.length > 0) {
-        return allContacts.filter((c) => c.type === tab);
+        const fromApi = allContacts.filter((c) => c.type === tab);
+        if (tab === 'paychat' || tab === 'business') {
+          void joinTick;
+          const dynamic =
+            tab === 'paychat'
+              ? loadDynamicPaychatContacts().map(dynamicContactToUi)
+              : loadDynamicBusinessContacts().map(dynamicBusinessContactToUi);
+          const seen = new Set(fromApi.map((c) => c.id));
+          return [...fromApi, ...dynamic.filter((c) => !seen.has(c.id))];
+        }
+        return fromApi;
       }
       const base = contactsForTab(tab);
-      if (tab !== 'paychat') return base;
-      void joinTick;
-      const dynamic = loadDynamicPaychatContacts().map(dynamicContactToUi);
-      const seen = new Set(base.map((c) => c.id));
-      return [...base, ...dynamic.filter((c) => !seen.has(c.id))];
+      if (tab === 'paychat') {
+        void joinTick;
+        const dynamic = loadDynamicPaychatContacts().map(dynamicContactToUi);
+        const seen = new Set(base.map((c) => c.id));
+        return [...base, ...dynamic.filter((c) => !seen.has(c.id))];
+      }
+      if (tab === 'business') {
+        void joinTick;
+        const dynamic = loadDynamicBusinessContacts().map(dynamicBusinessContactToUi);
+        const seen = new Set(base.map((c) => c.id));
+        return [...base, ...dynamic.filter((c) => !seen.has(c.id))];
+      }
+      return base;
     },
     [live, apiContacts, allContacts, joinTick]
   );

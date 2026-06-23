@@ -309,6 +309,41 @@ export async function uploadChatAttachment(token: string, file: File): Promise<s
   return url;
 }
 
+type SimpleApiResponse = {
+  status?: string;
+  message?: string;
+};
+
+export async function addPaychatContactByPspayId(token: string, pspayId: string): Promise<void> {
+  const res = await fetch(`${CHAT_BASE}/paychat/addContact`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ pspay_id: pspayId }),
+  });
+  const body = (await res.json().catch(() => ({}))) as SimpleApiResponse;
+  if (!res.ok || body.status !== 'success') {
+    throw new Error(body.message ?? 'Could not add PayChat contact');
+  }
+}
+
+export async function addBusinessContactByEmail(token: string, email: string): Promise<void> {
+  const res = await fetch(`${CHAT_BASE}/users/addContact`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ email, type: 'business' }),
+  });
+  const body = (await res.json().catch(() => ({}))) as SimpleApiResponse;
+  if (!res.ok || body.status !== 'success') {
+    throw new Error(body.message ?? 'Could not add business contact');
+  }
+}
+
 export function chatTypeForContact(contact: Contact): string {
   if (contact.type === 'business') return 'business';
   if (contact.type === 'paychat') return 'paychat';
