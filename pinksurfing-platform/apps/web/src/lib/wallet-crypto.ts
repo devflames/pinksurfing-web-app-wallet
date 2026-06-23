@@ -3,7 +3,7 @@
 import { generateMnemonic, mnemonicToSeedSync, validateMnemonic } from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english.js';
 import { sha256 } from '@noble/hashes/sha2';
-import * as ed from '@noble/ed25519';
+import { ed } from './noble-ed25519';
 import { withBasePath } from './base-path';
 
 export type DerivedWallet = {

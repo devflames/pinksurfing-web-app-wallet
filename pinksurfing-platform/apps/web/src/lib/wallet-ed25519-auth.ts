@@ -1,7 +1,7 @@
 'use client';
 
 import { sha256 } from '@noble/hashes/sha2';
-import * as ed from '@noble/ed25519';
+import { ed } from './noble-ed25519';
 
 function toBase64(bytes: Uint8Array): string {
   if (typeof Buffer !== 'undefined') {
