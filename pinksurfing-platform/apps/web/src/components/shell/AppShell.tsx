@@ -63,7 +63,9 @@ import type { BusinessContract, ContractActionType } from '@/lib/types/contract'
 import { contractId } from '@/lib/types/contract';
 import { useLiveChat } from '@/lib/use-live-chat';
 import { useContacts } from '@/lib/use-contacts';
-import { isChatLive, fetchPaychatRoomStatus } from '@/lib/chat-api';
+import { chatTypeForContact, fetchPaychatRoomStatus, isChatLive } from '@/lib/chat-api';
+import { publishStateEvent, syncContractStatesToThread } from '@/lib/state-message-service';
+import { VAULT_STATE_LABELS } from '@/lib/state-message-types';
 import { CallOverlay } from '@/components/calls/CallOverlay';
 import { CallHeaderAction } from '@/components/calls/CallHeaderAction';
 import { CallsContactsOverlay } from '@/components/calls/CallsContactsOverlay';
@@ -532,6 +534,7 @@ export function AppShell() {
     loading: chatLoading,
     uploading,
     error: chatError,
+    reload: reloadChat,
   } = useLiveChat({
     token,
     userId,
@@ -569,23 +572,25 @@ export function AppShell() {
     }
   }, [isChatSection, list, activeId, setActiveForSection]);
 
-  const loadContracts = useCallback(async () => {
+  const loadContracts = useCallback(async (): Promise<BusinessContract[]> => {
     if (!bizConv) {
       setContracts([]);
-      return;
+      return [];
     }
     if (isContractsLive() && !token) {
       setContracts([]);
-      return;
+      return [];
     }
     setContractsLoading(true);
     setContractsError(null);
     try {
       const data = await loadContractsByConversation(token ?? '', bizConv.conversationId);
       setContracts(data);
+      return data;
     } catch (e) {
       setContractsError(e instanceof Error ? e.message : 'Failed to load contracts');
       setContracts([]);
+      return [];
     } finally {
       setContractsLoading(false);
     }
@@ -605,12 +610,47 @@ export function AppShell() {
     loadContracts();
   }, [isChatSection, effectiveTab, active?.type, bizConv, loadContracts]);
 
+  useEffect(() => {
+    if (!chatLive || !token || !userId || !peerUserId || !active || active.type !== 'business') {
+      return;
+    }
+    if (contractsLoading || contracts.length === 0) return;
+
+    let cancelled = false;
+    void syncContractStatesToThread({
+      token,
+      fromUserId: userId,
+      toUserId: peerUserId,
+      contactId: active.id,
+      chatType: chatTypeForContact(active),
+      contracts,
+    }).then((published) => {
+      if (!cancelled && published > 0) void reloadChat();
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    chatLive,
+    token,
+    userId,
+    peerUserId,
+    active,
+    contracts,
+    contractsLoading,
+    reloadChat,
+  ]);
+
   const emitContractState = useCallback(
     (c: BusinessContract) => {
       const ev = STATE_EVENT_LABELS[c.state];
-      if (ev && active?.type === 'business') {
-        appendState(ev.label, ev.accent, c.title);
-      }
+      if (!ev || active?.type !== 'business') return;
+      void appendState(ev.label, ev.accent, c.title, {
+        eventType: 'CONTRACT_STATE',
+        refId: contractId(c),
+        state: c.state,
+      });
     },
     [active?.type, appendState]
   );
@@ -913,8 +953,9 @@ export function AppShell() {
       counterpartyUserId: bizConv.counterpartyUserId,
       ...data,
     });
-    appendState('⚡ Offer sent', '#EF9F27', data.title);
-    await loadContracts();
+    const updated = await loadContracts();
+    const match = updated.find((c) => c.title === data.title) ?? updated[0];
+    if (match) emitContractState(match);
   };
 
   const runAction = async (c: BusinessContract, action: ContractActionType) => {
@@ -949,11 +990,9 @@ export function AppShell() {
     try {
       await runContractAction(token, contractId(c), 'INITIATE_ESCROW_FUNDING', userId);
       await runContractAction(token, contractId(c), 'MARK_ESCROW_FUNDED', userId);
-      getChatSession().appendSystemText(
-        active.id,
-        '✔ Payment confirmed via Square. Starting work tomorrow.'
-      );
-      await loadContracts();
+      const updated = await loadContracts();
+      const match = updated.find((x) => contractId(x) === contractId(c));
+      if (match) emitContractState(match);
     } catch (e) {
       setContractsError(e instanceof Error ? e.message : 'Payment failed');
     } finally {
@@ -977,7 +1016,34 @@ export function AppShell() {
 
   const handlePaychatPaymentSuccess = (method: 'square' | 'vault' = 'square') => {
     if (!paychatCheckout) return;
-    const { contactId } = paychatCheckout;
+    const { contactId, toUserId } = paychatCheckout;
+    const labels =
+      method === 'vault' ? VAULT_STATE_LABELS.PAYCHAT_VAULT : VAULT_STATE_LABELS.PAYCHAT_SQUARE;
+
+    if (chatLive && token && userId && toUserId) {
+      void publishStateEvent({
+        token,
+        fromUserId: userId,
+        toUserId,
+        contactId,
+        chatType: 'paychat',
+        label: labels.label,
+        accent: labels.accent,
+        contractTitle: 'PayChat unlock',
+        eventType: 'VAULT_PAYCHAT',
+        refId: contactId,
+      }).then(() => {
+        if (active?.id === contactId) void reloadChat();
+      });
+    } else {
+      getChatSession().appendStateEvent(
+        contactId,
+        labels.label,
+        labels.accent,
+        'PayChat unlock'
+      );
+    }
+
     setPaychatCheckout(null);
     setUnlockedPaychat((u) => ({ ...u, [contactId]: true }));
     joinContactViaQr('paychat', contactId);
@@ -993,7 +1059,15 @@ export function AppShell() {
   };
 
   const handleSwapInitiate = () => {
-    appendState('⚡ Converting to Bitcoin — preparing…', '#F7931A', primaryContract?.title);
+    void appendState(
+      VAULT_STATE_LABELS.SWAP_INITIATED.label,
+      VAULT_STATE_LABELS.SWAP_INITIATED.accent,
+      primaryContract?.title,
+      {
+        eventType: 'VAULT_SWAP',
+        refId: primaryContract ? contractId(primaryContract) : undefined,
+      }
+    );
     setBusinessView('chat');
   };
 

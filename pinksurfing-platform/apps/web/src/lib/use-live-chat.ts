@@ -11,7 +11,15 @@ import {
 } from './chat-api';
 import { useChatSession } from './use-chat-session';
 import { getChatSession } from './chat-session';
+import { publishStateEvent } from './state-message-service';
+import type { StateEventType } from './state-message-types';
 import type { ThreadMessage } from './types/chat';
+
+export type AppendStateMeta = {
+  eventType?: StateEventType;
+  refId?: string;
+  state?: string;
+};
 
 type Options = {
   token: string | null;
@@ -57,19 +65,18 @@ export function useLiveChat({
 
   const messages = useMemo(() => {
     if (!live) return local.messages;
-    const stateEvents = local.messages.filter((m) => m.kind === 'state');
-    return [...apiMessages, ...stateEvents].sort((a, b) => {
-      // state events stay at end-ish; api messages already sorted
-      if (a.kind === 'state' && b.kind !== 'state') return 1;
-      if (b.kind === 'state' && a.kind !== 'state') return -1;
-      return 0;
-    });
+    return apiMessages;
   }, [live, apiMessages, local.messages]);
 
   const preview = useMemo(() => {
     if (!live) return local.preview;
-    const last = [...apiMessages].reverse().find((m) => m.kind === 'text' || m.kind === 'attachment');
+    const last = [...apiMessages]
+      .reverse()
+      .find((m) => m.kind === 'text' || m.kind === 'attachment' || m.kind === 'state');
     if (!last) return local.preview;
+    if (last.kind === 'state') {
+      return { preview: last.label, time: last.time };
+    }
     if (last.kind === 'attachment') {
       const audio = /\.(webm|mp3|m4a|ogg|wav)(\?|$)/i.test(last.attachmentUrl);
       return {
@@ -79,6 +86,40 @@ export function useLiveChat({
     }
     return { preview: last.text, time: last.time };
   }, [live, apiMessages, local.preview]);
+
+  const appendState = useCallback(
+    async (
+      label: string,
+      accent: string,
+      contractTitle?: string,
+      meta?: AppendStateMeta
+    ) => {
+      if (live && token && userId && peerUserId) {
+        setError(null);
+        try {
+          await publishStateEvent({
+            token,
+            fromUserId: userId,
+            toUserId: peerUserId,
+            contactId: contact.id,
+            chatType: chatTypeForContact(contact),
+            label,
+            accent,
+            contractTitle,
+            eventType: meta?.eventType ?? 'CONTRACT_STATE',
+            refId: meta?.refId,
+            state: meta?.state,
+          });
+          await reload();
+          return;
+        } catch (e) {
+          setError(e instanceof Error ? e.message : 'Failed to publish state event');
+        }
+      }
+      local.appendState(label, accent, contractTitle);
+    },
+    [live, token, userId, peerUserId, contact, local, reload]
+  );
 
   const send = useCallback(
     async (text: string) => {
@@ -140,7 +181,7 @@ export function useLiveChat({
     error,
     send,
     sendAttachment,
-    appendState: local.appendState,
+    appendState,
     appendSystem: local.appendSystem,
     reload,
   };

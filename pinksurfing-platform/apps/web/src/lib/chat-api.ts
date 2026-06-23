@@ -1,6 +1,7 @@
 import { getApiBase } from './api-client';
 import type { Contact, ChatTab } from '@pinksurfing/ui';
 import type { ThreadMessage } from './types/chat';
+import { parseStateEventPayload, type StateEventPayload } from './state-message-types';
 
 const CHAT_BASE = `${getApiBase()}/chat`;
 
@@ -252,8 +253,6 @@ function pushApiRow(
   m: ApiMessageRow,
   selfUserId: string
 ): { ts: number; msg: ThreadMessage } | null {
-  const side: 'in' | 'out' = m.from === selfUserId ? 'out' : 'in';
-  const { text, attachment } = parseMessagePayload(m.message);
   const time = formatMsgTime(m.timestamp);
   const id = m._id ?? `${m.from}-${m.timestamp}-${Math.random()}`;
   const ts =
@@ -262,6 +261,24 @@ function pushApiRow(
       : m.timestamp
         ? new Date(m.timestamp).getTime()
         : Date.now();
+
+  const stateEvent = parseStateEventPayload(m.message);
+  if (stateEvent) {
+    return {
+      ts,
+      msg: {
+        id,
+        kind: 'state',
+        label: stateEvent.label,
+        accent: stateEvent.accent,
+        contractTitle: stateEvent.contractTitle,
+        time,
+      },
+    };
+  }
+
+  const side: 'in' | 'out' = m.from === selfUserId ? 'out' : 'in';
+  const { text, attachment } = parseMessagePayload(m.message);
 
   if (attachment) {
     return {
@@ -282,6 +299,34 @@ function pushApiRow(
     ts,
     msg: { id, kind: 'text', side, text, time, attachmentUrl: undefined },
   };
+}
+
+export async function sendStateChatMessage(
+  token: string,
+  fromUserId: string,
+  toUserId: string,
+  chatType: string,
+  payload: StateEventPayload
+): Promise<void> {
+  const res = await fetch(`${CHAT_BASE}/chats/add`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: fromUserId,
+      to: toUserId,
+      chatType,
+      group: '0',
+      message: JSON.stringify(payload),
+      timestamp: new Date().toISOString(),
+    }),
+  });
+  const body = (await res.json().catch(() => ({}))) as { status?: string; message?: string };
+  if (!res.ok || body.status !== 'success') {
+    throw new Error(body.message ?? 'Failed to publish state event');
+  }
 }
 
 export async function sendChatMessage(
