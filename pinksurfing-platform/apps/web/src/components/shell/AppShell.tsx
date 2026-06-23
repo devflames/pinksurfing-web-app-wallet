@@ -100,6 +100,8 @@ import {
   type BusinessAvatarRing,
 } from '@/lib/business-chat-ring';
 import { useAgoraCall } from '@/lib/use-agora-call';
+import { useIncomingCalls } from '@/lib/use-incoming-calls';
+import { IncomingCallModal } from '@/components/calls/IncomingCallModal';
 
 
 function chatSectionFor(section: AppSection): boolean {
@@ -351,6 +353,11 @@ export function AppShell() {
     }
   }, []);
   const agora = useAgoraCall();
+  const callBusy = agora.status === 'connecting' || agora.status === 'live' || !!agora.pendingCall;
+  const { incoming, dismiss: dismissIncoming, clearIncoming } = useIncomingCalls(token, userId, {
+    enabled: isChatLive(),
+    busy: callBusy,
+  });
 
   const isChatSection = chatSectionFor(section);
   const chatTabs = useMemo(() => {
@@ -754,25 +761,60 @@ export function AppShell() {
     async (mode: CallMode, contactOverride?: Contact) => {
       const target = contactOverride ?? active;
       if (!token || !userId || !target) return;
-      const peer = resolvePeerUserId(target) ?? peerUserIdForContact(target.id);
+
+      const isGroup = !!(target.isGroup && target.groupId);
+      const peer = isGroup
+        ? target.groupId!
+        : resolvePeerUserId(target) ?? peerUserIdForContact(target.id);
+
       if (!peer) {
-        setCallError('No peer user id configured for this contact.');
+        setCallError(isGroup ? 'Group id missing for this chat.' : 'No peer user id configured for this contact.');
         return;
       }
+
       setCallError(null);
       callContactIdRef.current = target.id;
       const chatType = target.type === 'business' ? 'business' : 'personal';
-      await agora.joinCall({
+
+      await agora.startOutgoingCall({
         token,
         userId,
         peerUserId: peer,
         peerName: target.name,
         mode,
         chatType,
+        isGroup,
+        groupId: isGroup ? target.groupId : undefined,
+        groupName: isGroup ? target.name : undefined,
       });
     },
     [active, agora, token, userId, resolvePeerUserId]
   );
+
+  const acceptIncoming = useCallback(async () => {
+    if (!incoming || !token || !userId) return;
+    clearIncoming();
+    dismissIncoming(incoming.channel);
+    await agora.answerIncomingCall({
+      token,
+      userId,
+      channel: incoming.channel,
+      peerUserId: incoming.isGroup ? incoming.groupId ?? incoming.to : incoming.from,
+      peerName: incoming.isGroup ? incoming.groupName ?? incoming.callerName : incoming.callerName,
+      mode: incoming.mode,
+      chatType: incoming.chatType,
+      isGroup: incoming.isGroup,
+      groupId: incoming.groupId,
+      groupName: incoming.groupName,
+    });
+  }, [agora, clearIncoming, dismissIncoming, incoming, token, userId]);
+
+  const rejectIncoming = useCallback(async () => {
+    if (!incoming || !token) return;
+    dismissIncoming(incoming.channel);
+    await agora.declineIncomingCall(token, incoming.channel, incoming.groupId ?? '0');
+    clearIncoming();
+  }, [agora, clearIncoming, dismissIncoming, incoming, token]);
 
   const requestVideoCall = useCallback(
     (contact?: Contact) => {
@@ -1276,8 +1318,7 @@ export function AppShell() {
               </div>
             </div>
             <div className="ml-auto flex gap-1">
-              {!active.isGroup &&
-                (!paychatUnlocked && active.type === 'paychat' ? null : (
+              {(active.isGroup || active.type !== 'paychat' || paychatUnlocked) && (
                 <>
                   <CallHeaderAction
                     mode="voice"
@@ -1293,11 +1334,15 @@ export function AppShell() {
                     contactName={active.name}
                     history={callHistory}
                     disabled={agora.status === 'connecting' || !!agora.activeCall}
-                    onStart={() => requestVideoCall()}
-                    videoRateLabel={`$${VIDEO_CALL_RATE_PER_MIN_USD.toFixed(2)}/min via Square`}
+                    onStart={() => (active.isGroup ? void startCall('video') : requestVideoCall())}
+                    videoRateLabel={
+                      active.isGroup
+                        ? 'Group video'
+                        : `$${VIDEO_CALL_RATE_PER_MIN_USD.toFixed(2)}/min via Square`
+                    }
                   />
                 </>
-              ))}
+              )}
             </div>
           </header>
 
@@ -1487,6 +1532,14 @@ export function AppShell() {
               localVideoRef={agora.localVideoRefEl}
               onHangUp={handleHangUp}
               onToggleMute={agora.toggleMute}
+            />
+          )}
+
+          {incoming && !callBusy && (
+            <IncomingCallModal
+              call={incoming}
+              onAccept={() => void acceptIncoming()}
+              onReject={() => void rejectIncoming()}
             />
           )}
         </main>

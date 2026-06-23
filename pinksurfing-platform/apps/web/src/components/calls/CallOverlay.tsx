@@ -72,9 +72,20 @@ export function CallOverlay({
         )}
 
         <p className="text-xs uppercase tracking-widest text-[var(--ps-cyan)]">
-          {status === 'connecting' ? 'Connecting…' : isVideo ? 'Video call' : 'Voice call'}
+          {status === 'connecting'
+            ? 'Connecting…'
+            : call.isGroup
+              ? `Group ${isVideo ? 'video' : 'voice'}`
+              : isVideo
+                ? 'Video call'
+                : 'Voice call'}
         </p>
-        <h2 className="mt-2 text-xl font-semibold">{call.peerName}</h2>
+        <h2 className="mt-2 text-xl font-semibold">
+          {call.isGroup ? call.groupName ?? call.peerName : call.peerName}
+        </h2>
+        {call.isGroup && (
+          <p className="mt-1 text-sm text-white/50">{remoteUsers.length + 1} in channel</p>
+        )}
         <p className="mt-1 text-sm text-white/50">
           {status === 'live' ? formatDuration(seconds) : status === 'connecting' ? 'Joining channel…' : ''}
         </p>

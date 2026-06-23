@@ -2,16 +2,40 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { IAgoraRTCClient, ICameraVideoTrack, IMicrophoneAudioTrack, ILocalTrack, IRemoteAudioTrack, IRemoteVideoTrack } from 'agora-rtc-sdk-ng';
-import { agoraUidFromUserId, endCall, fetchRtcToken, initiateCall, buildDemoChannel } from './calls-api';
+import {
+  acceptCall,
+  agoraUidFromUserId,
+  endCall,
+  fetchRtcToken,
+  initiateCall,
+  rejectCall,
+  buildDemoChannel,
+} from './calls-api';
 import type { ActiveCall, CallMode } from './types/call';
 
-type JoinInput = {
+type OutgoingInput = {
   token: string;
   userId: string;
   peerUserId: string;
   peerName: string;
   mode: CallMode;
   chatType: 'personal' | 'business';
+  groupId?: string;
+  groupName?: string;
+  isGroup?: boolean;
+};
+
+type AnswerInput = {
+  token: string;
+  userId: string;
+  channel: string;
+  peerUserId: string;
+  peerName: string;
+  mode: CallMode;
+  chatType: 'personal' | 'business';
+  isGroup?: boolean;
+  groupId?: string;
+  groupName?: string;
 };
 
 const DEMO_CALLS = process.env.NEXT_PUBLIC_CALLS_DEMO === 'true';
@@ -49,26 +73,104 @@ export function useAgoraCall() {
   const hangUp = useCallback(
     async (authToken: string | null) => {
       const channel = activeCall?.channel;
+      const groupId = activeCall?.groupId ?? '0';
       await cleanup();
       setActiveCall(null);
       setPendingCall(null);
       setStatus('idle');
       setError(null);
       if (authToken && channel && !DEMO_CALLS) {
-        await endCall(authToken, channel).catch(() => undefined);
+        await endCall(authToken, channel, groupId).catch(() => undefined);
       }
     },
-    [activeCall?.channel, cleanup]
+    [activeCall?.channel, activeCall?.groupId, cleanup]
   );
 
-  const joinCall = useCallback(
-    async (input: JoinInput) => {
+  const connectToChannel = useCallback(
+    async (input: {
+      token: string;
+      userId: string;
+      channel: string;
+      mode: CallMode;
+      peerName: string;
+      peerUserId: string;
+      chatType: 'personal' | 'business';
+      isGroup?: boolean;
+      groupId?: string;
+      groupName?: string;
+    }) => {
       if (!APP_ID) {
         setError('Set NEXT_PUBLIC_AGORA_APP_ID in apps/web/.env.local');
         setStatus('error');
         return;
       }
 
+      const AgoraRTC = (await import('agora-rtc-sdk-ng')).default;
+      const uid = agoraUidFromUserId(input.userId);
+      const rtcToken = await fetchRtcToken(input.channel, uid);
+
+      const client = AgoraRTC.createClient({
+        mode: input.isGroup ? 'live' : 'rtc',
+        codec: 'vp8',
+      });
+      clientRef.current = client;
+
+      if (input.isGroup) {
+        await client.setClientRole('host');
+      }
+
+      client.on('user-published', async (user, mediaType) => {
+        await client.subscribe(user, mediaType);
+        if (mediaType === 'audio') {
+          (user.audioTrack as IRemoteAudioTrack)?.play();
+        }
+        if (mediaType === 'video' && remoteVideoRef.current && user.videoTrack) {
+          user.videoTrack.play(remoteVideoRef.current);
+        }
+        setRemoteUsers((prev) =>
+          prev.includes(user.uid as number) ? prev : [...prev, user.uid as number]
+        );
+      });
+
+      client.on('user-unpublished', (user) => {
+        setRemoteUsers((prev) => prev.filter((id) => id !== user.uid));
+      });
+
+      await client.join(APP_ID, input.channel, rtcToken, uid);
+
+      const audioTrack = await AgoraRTC.createMicrophoneAudioTrack();
+      localAudioRef.current = audioTrack;
+
+      const tracks: ILocalTrack[] = [audioTrack];
+      if (input.mode === 'video') {
+        const videoTrack = await AgoraRTC.createCameraVideoTrack();
+        localVideoRef.current = videoTrack;
+        tracks.push(videoTrack);
+        if (localVideoRefEl.current) {
+          videoTrack.play(localVideoRefEl.current);
+        }
+      }
+
+      await client.publish(tracks);
+
+      setActiveCall({
+        channel: input.channel,
+        mode: input.mode,
+        peerName: input.peerName,
+        peerUserId: input.peerUserId,
+        chatType: input.chatType,
+        isGroup: input.isGroup,
+        groupId: input.groupId,
+        groupName: input.groupName,
+      });
+      setPendingCall(null);
+      setStatus('live');
+    },
+    []
+  );
+
+  const startOutgoingCall = useCallback(
+    async (input: OutgoingInput) => {
       setStatus('connecting');
       setError(null);
       setPendingCall({
@@ -76,6 +178,9 @@ export function useAgoraCall() {
         peerName: input.peerName,
         peerUserId: input.peerUserId,
         chatType: input.chatType,
+        isGroup: input.isGroup,
+        groupId: input.groupId,
+        groupName: input.groupName,
       });
 
       try {
@@ -86,61 +191,26 @@ export function useAgoraCall() {
             to: input.peerUserId,
             mode: input.mode,
             chatType: input.chatType,
-            message: `${input.mode} call from web`,
+            groupId: input.groupId,
+            groupName: input.groupName,
           });
         } catch (e) {
           if (!DEMO_CALLS) throw e;
           channel = buildDemoChannel(input.userId, input.peerUserId);
         }
 
-        const AgoraRTC = (await import('agora-rtc-sdk-ng')).default;
-        const uid = agoraUidFromUserId(input.userId);
-        const rtcToken = await fetchRtcToken(channel, uid);
-
-        const client = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
-        clientRef.current = client;
-
-        client.on('user-published', async (user, mediaType) => {
-          await client.subscribe(user, mediaType);
-          if (mediaType === 'audio') {
-            (user.audioTrack as IRemoteAudioTrack)?.play();
-          }
-          if (mediaType === 'video' && remoteVideoRef.current && user.videoTrack) {
-            user.videoTrack.play(remoteVideoRef.current);
-          }
-          setRemoteUsers((prev) => (prev.includes(user.uid as number) ? prev : [...prev, user.uid as number]));
-        });
-
-        client.on('user-unpublished', (user) => {
-          setRemoteUsers((prev) => prev.filter((id) => id !== user.uid));
-        });
-
-        await client.join(APP_ID, channel, rtcToken, uid);
-
-        const audioTrack = await AgoraRTC.createMicrophoneAudioTrack();
-        localAudioRef.current = audioTrack;
-
-        const tracks: ILocalTrack[] = [audioTrack];
-        if (input.mode === 'video') {
-          const videoTrack = await AgoraRTC.createCameraVideoTrack();
-          localVideoRef.current = videoTrack;
-          tracks.push(videoTrack);
-          if (localVideoRefEl.current) {
-            videoTrack.play(localVideoRefEl.current);
-          }
-        }
-
-        await client.publish(tracks);
-
-        setActiveCall({
+        await connectToChannel({
+          token: input.token,
+          userId: input.userId,
           channel,
           mode: input.mode,
           peerName: input.peerName,
           peerUserId: input.peerUserId,
           chatType: input.chatType,
+          isGroup: input.isGroup,
+          groupId: input.groupId,
+          groupName: input.groupName,
         });
-        setPendingCall(null);
-        setStatus('live');
       } catch (e) {
         await cleanup();
         setActiveCall(null);
@@ -149,7 +219,61 @@ export function useAgoraCall() {
         setError(e instanceof Error ? e.message : 'Call failed');
       }
     },
-    [cleanup]
+    [cleanup, connectToChannel]
+  );
+
+  const answerIncomingCall = useCallback(
+    async (input: AnswerInput) => {
+      setStatus('connecting');
+      setError(null);
+      setPendingCall({
+        mode: input.mode,
+        peerName: input.peerName,
+        peerUserId: input.peerUserId,
+        chatType: input.chatType,
+        isGroup: input.isGroup,
+        groupId: input.groupId,
+        groupName: input.groupName,
+      });
+
+      try {
+        if (!DEMO_CALLS) {
+          await acceptCall(input.token, input.channel);
+        }
+        await connectToChannel({
+          token: input.token,
+          userId: input.userId,
+          channel: input.channel,
+          mode: input.mode,
+          peerName: input.peerName,
+          peerUserId: input.peerUserId,
+          chatType: input.chatType,
+          isGroup: input.isGroup,
+          groupId: input.groupId,
+          groupName: input.groupName,
+        });
+      } catch (e) {
+        await cleanup();
+        setActiveCall(null);
+        setPendingCall(null);
+        setStatus('error');
+        setError(e instanceof Error ? e.message : 'Could not join call');
+      }
+    },
+    [cleanup, connectToChannel]
+  );
+
+  const declineIncomingCall = useCallback(async (token: string, channel: string, groupId = '0') => {
+    if (!DEMO_CALLS) {
+      await rejectCall(token, channel, groupId).catch(() => undefined);
+    }
+  }, []);
+
+  const joinCall = useCallback(
+    async (input: OutgoingInput) => {
+      await startOutgoingCall(input);
+    },
+    [startOutgoingCall]
   );
 
   const toggleMute = useCallback(async () => {
@@ -176,6 +300,9 @@ export function useAgoraCall() {
     remoteVideoRef,
     localVideoRefEl,
     joinCall,
+    startOutgoingCall,
+    answerIncomingCall,
+    declineIncomingCall,
     hangUp,
     toggleMute,
   };
