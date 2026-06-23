@@ -32,7 +32,32 @@ type ContactListResponse = {
 type MessageBulkResponse = {
   status: string;
   accounts?: ApiMessageAccount[];
+  dialAskAmount?: number | string;
   message?: string;
+};
+
+type ApiChatroomRow = {
+  from?: string;
+  to?: string;
+  access?: boolean;
+  chatType?: string;
+};
+
+export type PaychatRoomStatus = {
+  dialAskAmount: number;
+  access: boolean;
+};
+
+type PaymentLinkResponse = {
+  status: string;
+  message?: string;
+  data?: {
+    paymentLink?: {
+      url?: string;
+      orderId?: string;
+      id?: string;
+    };
+  };
 };
 
 type ApiMessageAccount = {
@@ -314,8 +339,82 @@ type SimpleApiResponse = {
   message?: string;
 };
 
+function parseDialAskAmount(value: unknown): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim()) {
+    const n = Number(value);
+    if (Number.isFinite(n)) return n;
+  }
+  return 0;
+}
+
+function paychatRoomFromBulk(
+  accounts: ApiChatroomRow[] | undefined,
+  fromUserId: string,
+  toUserId: string
+): ApiChatroomRow | undefined {
+  const rows = accounts ?? [];
+  return (
+    rows.find(
+      (row) =>
+        (row.from === fromUserId && row.to === toUserId) ||
+        (row.from === toUserId && row.to === fromUserId)
+    ) ?? rows[0]
+  );
+}
+
+export async function fetchPaychatRoomStatus(
+  token: string,
+  fromUserId: string,
+  toUserId: string
+): Promise<PaychatRoomStatus> {
+  const res = await fetch(`${CHAT_BASE}/chats/getOneToOneMessageBulk`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: fromUserId,
+      to: toUserId,
+      chatType: 'paychat',
+      last_sync: '1990-01-01 12:00:00',
+    }),
+  });
+  const body = (await res.json().catch(() => ({}))) as MessageBulkResponse;
+  if (!res.ok || body.status !== 'success') {
+    throw new Error(body.message ?? 'Failed to load PayChat status');
+  }
+  const dialAskAmount = parseDialAskAmount(body.dialAskAmount);
+  const room = paychatRoomFromBulk(body.accounts, fromUserId, toUserId);
+  const access = room?.access === true || dialAskAmount === 0;
+  return { dialAskAmount, access };
+}
+
+export async function createPaychatPaymentLink(
+  token: string,
+  fromUserId: string,
+  toUserId: string
+): Promise<string> {
+  const res = await fetch(`${CHAT_BASE}/chats/paychat/create-payment-link`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ from: fromUserId, to: toUserId }),
+  });
+  const body = (await res.json().catch(() => ({}))) as PaymentLinkResponse;
+  if (!res.ok || body.status !== 'success') {
+    throw new Error(body.message ?? 'Could not create payment link');
+  }
+  const url = body.data?.paymentLink?.url;
+  if (!url) throw new Error('Payment link missing from server');
+  return url;
+}
+
 export async function addPaychatContactByPspayId(token: string, pspayId: string): Promise<void> {
-  const res = await fetch(`${CHAT_BASE}/paychat/addContact`, {
+  const res = await fetch(`${CHAT_BASE}/chats/paychat/addContact`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,

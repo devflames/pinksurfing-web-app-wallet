@@ -26,6 +26,7 @@ export type PaychatRegistryEntry = {
   name: string;
   code: string;
   askUsd?: number;
+  chiaAddress?: string;
 };
 
 export type BusinessRegistryEntry = {
@@ -101,6 +102,10 @@ export function findPaychatRegistryEntry(code: string): PaychatRegistryEntry | n
   return loadPaychatRegistry().find((e) => e.code.toUpperCase() === key) ?? null;
 }
 
+export function findPaychatRegistryByUserId(userId: string): PaychatRegistryEntry | null {
+  return loadPaychatRegistry().find((e) => e.userId === userId) ?? null;
+}
+
 export function findBusinessRegistryEntry(code: string): BusinessRegistryEntry | null {
   const key = code.trim().toUpperCase();
   return loadBusinessRegistry().find((e) => e.code.toUpperCase() === key) ?? null;
@@ -109,7 +114,8 @@ export function findBusinessRegistryEntry(code: string): BusinessRegistryEntry |
 export function registerUserPaychatQr(
   user: SessionUser | null,
   displayName: string,
-  askUsd?: number
+  askUsd?: number,
+  chiaAddress?: string
 ): string {
   const code = paychatInviteCodeForUser(user);
   if (!user?.id || typeof window === 'undefined') return code;
@@ -118,6 +124,7 @@ export function registerUserPaychatQr(
     name: displayName,
     code,
     askUsd,
+    chiaAddress: chiaAddress?.trim() || undefined,
   };
   const list = loadPaychatRegistry().filter((e) => e.userId !== user.id);
   localStorage.setItem(PAYCHAT_REGISTRY_KEY, JSON.stringify([...list, entry]));

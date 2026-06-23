@@ -17,6 +17,7 @@ import { PayChatReceiveCard } from '@/components/paychat/PayChatReceiveCard';
 import { PayChatDialOverlay } from '@/components/paychat/PayChatDialOverlay';
 import { PayChatDirectionTabs } from '@/components/paychat/PayChatDirectionTabs';
 import { SquareCheckoutModal } from '@/components/paychat/SquareCheckoutModal';
+import { PayChatCheckoutModal } from '@/components/paychat/PayChatCheckoutModal';
 import { loadPayChatSettings, savePayChatSettings } from '@/lib/paychat-settings-storage';
 import { formatPaychatPrice, paychatPriceForStep } from '@/lib/paychat-pricing';
 import { WalletPanel } from '@/components/wallet/WalletPanel';
@@ -62,7 +63,7 @@ import type { BusinessContract, ContractActionType } from '@/lib/types/contract'
 import { contractId } from '@/lib/types/contract';
 import { useLiveChat } from '@/lib/use-live-chat';
 import { useContacts } from '@/lib/use-contacts';
-import { isChatLive } from '@/lib/chat-api';
+import { isChatLive, fetchPaychatRoomStatus } from '@/lib/chat-api';
 import { CallOverlay } from '@/components/calls/CallOverlay';
 import { CallHeaderAction } from '@/components/calls/CallHeaderAction';
 import { CallsContactsOverlay } from '@/components/calls/CallsContactsOverlay';
@@ -88,6 +89,8 @@ import {
 } from '@/lib/saved-contacts';
 
 import { joinContactViaQr, paychatInviteCodeForUser, registerUserPaychatQr, registerUserBusinessQr, consumePendingQrJoin, consumeQrJoinResult } from '@/lib/qr-invite';
+import { resolveRecipientChiaAddress } from '@/lib/paychat-vault-payment';
+import { loadWalletIdentity } from '@/lib/wallet-identity-storage';
 import { executeQrJoin } from '@/lib/qr-join-service';
 import type { BusinessCardSnapshot } from '@/lib/business-card-types';
 import {
@@ -308,7 +311,11 @@ export function AppShell() {
     contactId: string;
     name: string;
     amountUsd: number;
+    toUserId: string;
+    recipientChiaAddress?: string | null;
   } | null>(null);
+  const [paychatServerAsk, setPaychatServerAsk] = useState<Record<string, number>>({});
+  const [mobileChatFocused, setMobileChatFocused] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
   const [qrModalKind, setQrModalKind] = useState<'business' | 'paychat'>('business');
   const [shopMode, setShopMode] = useState<ShopMode>('browse');
@@ -412,10 +419,12 @@ export function AppShell() {
 
   useEffect(() => {
     if (!user) return;
+    const walletId = loadWalletIdentity(user.email ?? '');
     registerUserPaychatQr(
       user,
       displayName(user),
-      paychatSettings.accepting ? paychatPriceForStep(paychatSettings.step) : undefined
+      paychatSettings.accepting ? paychatPriceForStep(paychatSettings.step) : undefined,
+      walletId?.chiaAddress
     );
     registerUserBusinessQr(user, displayName(user));
   }, [user, paychatSettings.step, paychatSettings.accepting]);
@@ -502,6 +511,11 @@ export function AppShell() {
     active?.type === 'paychat' &&
     (paychatDir(active) === 'incoming' || active.unlocked || unlockedPaychat[active.id]);
 
+  const activePaychatAskUsd =
+    active?.type === 'paychat'
+      ? (paychatServerAsk[active.id] ?? active.askUsd ?? 0)
+      : 0;
+
   const chatLive = isChatLive();
   const {
     messages,
@@ -519,6 +533,27 @@ export function AppShell() {
     fallbackPreview: active?.preview ?? '',
   });
 
+  useEffect(() => {
+    if (!chatLive || !token || !userId || !active || active.type !== 'paychat') return;
+    if (paychatDir(active) !== 'outgoing') return;
+    const peerId = resolvePeerUserId(active);
+    if (!peerId) return;
+
+    let cancelled = false;
+    fetchPaychatRoomStatus(token, userId, peerId)
+      .then((status) => {
+        if (cancelled) return;
+        setPaychatServerAsk((prev) => ({ ...prev, [active.id]: status.dialAskAmount }));
+        if (status.access) {
+          setUnlockedPaychat((u) => ({ ...u, [active.id]: true }));
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [chatLive, token, userId, active, resolvePeerUserId]);
 
   useEffect(() => {
     if (!isChatSection || list.length === 0) return;
@@ -675,12 +710,19 @@ export function AppShell() {
     section === 'home' &&
     (!!homeMainOverlay || (!!active?.isGroup && groupEditMode));
 
+  useEffect(() => {
+    if (!isChatSection) setMobileChatFocused(false);
+  }, [isChatSection]);
+
   const selectChat = (id: string) => {
     setActiveForSection(id);
     setBusinessView('chat');
     setCallError(null);
     setHomeMainOverlay(null);
     setGroupEditMode(false);
+    if (typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches) {
+      setMobileChatFocused(true);
+    }
   };
 
   const openGroupEdit = useCallback(
@@ -891,6 +933,23 @@ export function AppShell() {
     setActiveForSection(contactId);
   };
 
+  const handlePaychatPaymentSuccess = (method: 'square' | 'vault' = 'square') => {
+    if (!paychatCheckout) return;
+    const { contactId } = paychatCheckout;
+    setPaychatCheckout(null);
+    setUnlockedPaychat((u) => ({ ...u, [contactId]: true }));
+    joinContactViaQr('paychat', contactId);
+    refreshJoined();
+    getChatSession().appendSystemText(
+      contactId,
+      method === 'vault'
+        ? 'Vault payment sent on-chain. PayChat unlocked.'
+        : 'Payment confirmed via Square. PayChat unlocked.'
+    );
+    setActiveForSection(contactId);
+    setMobileChatFocused(true);
+  };
+
   const handleSwapInitiate = () => {
     appendState('⚡ Converting to Bitcoin — preparing…', '#F7931A', primaryContract?.title);
     setBusinessView('chat');
@@ -921,7 +980,7 @@ export function AppShell() {
   return (
     <ShellNavProvider section={section} shopMode={shopMode} onNavigate={handleNavigate}>
     <ShellChrome>
-    <div className="relative flex h-[min(780px,calc(100vh-1.5rem))] w-full flex-col overflow-hidden rounded-2xl border border-[var(--ps-brd)] bg-[var(--ps-bg)]/95 shadow-[0_24px_80px_rgba(0,0,0,0.55)] backdrop-blur-sm">
+    <div className="relative flex h-[100dvh] w-full flex-col overflow-hidden border-0 bg-[var(--ps-bg)]/95 md:h-[min(780px,calc(100vh-1.5rem))] md:rounded-2xl md:border md:border-[var(--ps-brd)] md:shadow-[0_24px_80px_rgba(0,0,0,0.55)] md:backdrop-blur-sm">
       {showStatusBar && (
         <div className="shrink-0 border-b border-[var(--ps-brd)] bg-[var(--ps-card2)] px-3 py-1.5 text-[10px]">
           {authLoading && <span className="text-[var(--ps-muted)]">Connecting…</span>}
@@ -940,8 +999,8 @@ export function AppShell() {
         </div>
       )}
 
-      <header className="flex shrink-0 items-center justify-between border-b border-[var(--ps-brd2)]/40 bg-[var(--ps-surf)] px-4 py-3">
-        <div className="text-[22px] font-semibold tracking-tight text-[var(--ps-white)]">
+      <header className="flex shrink-0 items-center justify-between border-b border-[var(--ps-brd2)]/40 bg-[var(--ps-surf)] px-3 py-2.5 md:px-4 md:py-3">
+        <div className="text-lg font-semibold tracking-tight text-[var(--ps-white)] md:text-[22px]">
           {SECTION_TITLES[section]}
         </div>
         <div className="flex items-center gap-2">
@@ -963,7 +1022,11 @@ export function AppShell() {
 
       {isChatSection && active ? (
       <div className="app-shell flex min-h-0 flex-1 overflow-hidden">
-        <aside className="flex w-[240px] shrink-0 flex-col border-r border-[var(--ps-brd)] bg-[var(--ps-surf)]">
+        <aside
+          className={`flex shrink-0 flex-col border-r border-[var(--ps-brd)] bg-[var(--ps-surf)] md:w-[240px] ${
+            mobileChatFocused ? 'max-md:hidden' : 'w-full max-md:flex-1'
+          }`}
+        >
           <div className="border-b border-[var(--ps-brd)] p-2.5">
             <div className="mb-2 flex items-center gap-1.5">
               <button
@@ -1107,7 +1170,11 @@ export function AppShell() {
           </div>
         </aside>
 
-        <main className="relative flex min-w-0 flex-1 flex-col">
+        <main
+          className={`relative flex min-w-0 flex-1 flex-col ${
+            mobileChatFocused ? 'max-md:flex' : 'max-md:hidden md:flex'
+          }`}
+        >
           {homePanelActive ? (
             <>
               {homeMainOverlay === 'find' && (
@@ -1165,7 +1232,15 @@ export function AppShell() {
             <BusinessViewTabs active={businessView} onChange={setBusinessView} />
           )}
 
-          <header className="flex shrink-0 items-center gap-2 border-b border-[var(--ps-brd)] bg-[var(--ps-surf)] px-3 py-2">
+          <header className="flex shrink-0 items-center gap-2 border-b border-[var(--ps-brd)] bg-[var(--ps-surf)] px-2 py-2 md:px-3">
+            <button
+              type="button"
+              aria-label="Back to chats"
+              onClick={() => setMobileChatFocused(false)}
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[var(--ps-brd)] text-sm text-[var(--ps-muted)] md:hidden"
+            >
+              ←
+            </button>
             {active.isGroup && activeGroupAvatars.length > 0 ? (
               <GroupAvatar
                 urls={activeGroupAvatars}
@@ -1246,14 +1321,19 @@ export function AppShell() {
           {active.type === 'paychat' && paychatDir(active) === 'outgoing' && !paychatUnlocked ? (
             <PayChatGate
               name={active.name}
-              askUsd={active.askUsd ?? 0}
-              onUnlock={() =>
-                setPaychatCheckout({
-                  contactId: active.id,
-                  name: active.name,
-                  amountUsd: active.askUsd ?? 0,
-                })
-              }
+              askUsd={activePaychatAskUsd}
+              onUnlock={() => {
+                const peerId = resolvePeerUserId(active);
+                void resolveRecipientChiaAddress(active).then((recipientChiaAddress) => {
+                  setPaychatCheckout({
+                    contactId: active.id,
+                    name: active.name,
+                    amountUsd: activePaychatAskUsd,
+                    toUserId: peerId ?? '',
+                    recipientChiaAddress,
+                  });
+                });
+              }}
             />
           ) : active.type === 'business' && !active.isGroup && businessView === 'swap' ? (
             <BtcSwapView onBack={() => setBusinessView('chat')} onInitiate={handleSwapInitiate} />
@@ -1347,16 +1427,31 @@ export function AppShell() {
             />
           )}
 
-          {paychatCheckout && (
-            <SquareCheckoutModal
-              mode="paychat"
-              open
-              name={paychatCheckout.name}
-              amountUsd={paychatCheckout.amountUsd}
-              onClose={() => setPaychatCheckout(null)}
-              onConfirm={confirmPaychatPayment}
-            />
-          )}
+          {paychatCheckout &&
+            (chatLive && token && userId && paychatCheckout.toUserId ? (
+              <PayChatCheckoutModal
+                open
+                name={paychatCheckout.name}
+                amountUsd={paychatCheckout.amountUsd}
+                token={token}
+                fromUserId={userId}
+                toUserId={paychatCheckout.toUserId}
+                userEmail={user?.email ?? ''}
+                recipientChiaAddress={paychatCheckout.recipientChiaAddress}
+                walletLive={process.env.NEXT_PUBLIC_WALLET_LIVE === 'true'}
+                onClose={() => setPaychatCheckout(null)}
+                onSuccess={handlePaychatPaymentSuccess}
+              />
+            ) : (
+              <SquareCheckoutModal
+                mode="paychat"
+                open
+                name={paychatCheckout.name}
+                amountUsd={paychatCheckout.amountUsd}
+                onClose={() => setPaychatCheckout(null)}
+                onConfirm={confirmPaychatPayment}
+              />
+            ))}
 
           {videoCallCheckout && (
             <SquareCheckoutModal
@@ -1397,7 +1492,7 @@ export function AppShell() {
         </main>
 
         {!(section === 'home' && homePanelActive) && (
-        <aside className="ps-scroll flex w-[210px] shrink-0 flex-col overflow-y-auto border-l border-[var(--ps-brd)] bg-[var(--ps-surf)]">
+        <aside className="ps-scroll hidden w-[210px] shrink-0 flex-col overflow-y-auto border-l border-[var(--ps-brd)] bg-[var(--ps-surf)] md:flex">
           <ContactDetailPanel
             contact={active}
             contracts={contracts}

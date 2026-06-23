@@ -176,6 +176,91 @@ export async function acceptAtomicSwap(
   return res.data;
 }
 
+export type PaychatAskPrice = {
+  chiaAddress: string;
+  askAmountMojos: number;
+  isActive: boolean;
+};
+
+export type PreparedPaychatOffer = {
+  coinSpendsJson: unknown[];
+  signingMessageHex: string;
+  extraSigningMessagesHex?: string[];
+  senderAddress?: string;
+  recipientAddress?: string;
+  amountMojos?: number;
+  coinIds?: string[];
+};
+
+export type StoredPaychatOffer = {
+  id: string;
+  status: string;
+};
+
+export async function fetchPaychatAskPrice(chiaAddress: string): Promise<PaychatAskPrice | null> {
+  const encoded = encodeURIComponent(chiaAddress);
+  try {
+    const res = await walletFetch<{ status: string; data?: PaychatAskPrice }>(
+      `${base()}/paychat/ask-price/${encoded}`
+    );
+    return res.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function preparePaychatOffer(body: {
+  senderPubkeyHex: string;
+  recipientAddress: string;
+  amountMojos: number;
+  memo?: string;
+}): Promise<PreparedPaychatOffer> {
+  const res = await walletFetch<{ status: string; data?: PreparedPaychatOffer }>(
+    `${base()}/paychat/prepare-offer`,
+    {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }
+  );
+  if (!res.data?.coinSpendsJson || !res.data.signingMessageHex) {
+    throw new Error('Prepare offer returned incomplete data');
+  }
+  return res.data;
+}
+
+export async function storePaychatOffer(body: {
+  senderAddress: string;
+  recipientAddress: string;
+  amountMojos: number;
+  memo?: string;
+  coinSpendsJson: unknown[];
+  signatureHex: string;
+  coinIds: string[];
+}): Promise<StoredPaychatOffer> {
+  const res = await walletFetch<{ status: string; data?: StoredPaychatOffer }>(
+    `${base()}/paychat/store-offer`,
+    {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }
+  );
+  if (!res.data?.id) throw new Error('Store offer returned no id');
+  return res.data;
+}
+
+export async function acceptPaychatOffer(offerId: string): Promise<void> {
+  await walletFetch(`${base()}/paychat/accept-offer/${encodeURIComponent(offerId)}`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
+}
+
+export function usdToMojosEstimate(usd: number): number {
+  const xchPerUsd = Number(process.env.NEXT_PUBLIC_XCH_USD_RATE) || 5;
+  const mojos = Math.round((usd / xchPerUsd) * 1_000_000_000_000);
+  return Math.max(mojos, 1);
+}
+
 export function formatXch(mojos: string | number): string {
   const n = typeof mojos === 'string' ? Number(mojos) : mojos;
   if (!Number.isFinite(n)) return String(mojos);

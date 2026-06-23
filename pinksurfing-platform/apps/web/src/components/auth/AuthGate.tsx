@@ -36,7 +36,7 @@ export function AuthGate() {
   }
 
   return (
-    <div className="ps-app-bg flex min-h-screen justify-center p-3 sm:p-4">
+    <div className="ps-app-bg flex min-h-[100dvh] justify-center p-0 md:p-4">
       <div className="flex w-full max-w-6xl flex-1 flex-col">
         <WalletProvisionGate>
           <AppShell />

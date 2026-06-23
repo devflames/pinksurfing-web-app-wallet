@@ -594,4 +594,44 @@ body {
   background: var(--ps-bg);
   color: var(--ps-white);
   font-family: var(--font-sans);
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+/* Mobile shell — full viewport chat app */
+@media (max-width: 767px) {
+  .ps-app-bg::before,
+  .ps-app-bg::after {
+    opacity: 0.28;
+  }
+
+  .ps-scroll {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .ps-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    border-radius: 0;
+  }
+
+  .ps-modal-sheet {
+    max-height: 92dvh;
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+
+  .ps-paychat-tab-thirds {
+    font-size: 9px;
+  }
+
+  .ps-paychat-dial {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
+}
+
+/* Bottom nav safe area */
+nav.flex.shrink-0.border-t {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
