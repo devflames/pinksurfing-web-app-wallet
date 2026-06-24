@@ -1,7 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { WalletIdentityCard } from '@/components/wallet/WalletIdentityCard';
+import { VaultWithdrawForm } from '@/components/wallet/VaultWithdrawForm';
+import { useWalletIdentity } from '@/hooks/use-wallet-identity';
+import { loadVaultDepositAddress } from '@/lib/vault-withdraw-flow';
+import { lookupKeyVault } from '@/lib/wallet-api';
+import { copyText } from '@/lib/wallet-identity-storage';
 
 function ScreenShell({
   title,
@@ -165,13 +170,44 @@ export function DepositWithdrawScreen({
   onBack: () => void;
   onSuccess: (msg: string) => void;
 }) {
-  const [amount, setAmount] = useState('');
+  const { chiaAddress, walletLive } = useWalletIdentity();
   const [mode, setMode] = useState<'deposit' | 'withdraw'>('deposit');
+  const [depositAddress, setDepositAddress] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (mode !== 'deposit' || !walletLive || !chiaAddress.trim()) {
+      setDepositAddress(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const lookup = await lookupKeyVault(chiaAddress.trim());
+        if (!lookup.success || !lookup.launcherId) {
+          if (!cancelled) setLoadError(lookup.message ?? 'No KeyVault');
+          return;
+        }
+        const addr = await loadVaultDepositAddress(lookup.launcherId);
+        if (!cancelled) {
+          setDepositAddress(addr);
+          setLoadError(null);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setLoadError(e instanceof Error ? e.message : 'Could not load deposit address');
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [mode, walletLive, chiaAddress]);
 
   return (
     <ScreenShell
       title="Deposit and Withdraw"
-      subtitle="BTC in / XCH — use your wallet address below; vault uses Chia KeyVault (non-custodial)"
+      subtitle="XCH KeyVault — non-custodial p2_keyvault coins on Chia"
       onBack={onBack}
     >
       <div className="mb-4">
@@ -194,17 +230,39 @@ export function DepositWithdrawScreen({
         ))}
       </div>
       <FormCard>
-        <Field label="Amount (XCH / USD)" value={amount} onChange={setAmount} placeholder="0.00" />
-        <PrimaryBtn
-          label={mode === 'deposit' ? 'Deposit funds' : 'Withdraw funds'}
-          onClick={() =>
-            onSuccess(
-              amount
-                ? `${mode === 'deposit' ? 'Deposit' : 'Withdrawal'} of ${amount} queued (demo)`
-                : 'Enter an amount'
-            )
-          }
-        />
+        {mode === 'deposit' ? (
+          <>
+            {!walletLive && (
+              <p className="text-[10px] text-[var(--ps-dim)]">
+                Enable NEXT_PUBLIC_WALLET_LIVE for live vault deposit address.
+              </p>
+            )}
+            {loadError && <p className="text-[10px] text-[var(--ps-red,#f87171)]">{loadError}</p>}
+            {depositAddress ? (
+              <>
+                <p className="text-[10px] text-[var(--ps-muted)]">
+                  Send XCH to this KeyVault deposit address from any Chia wallet:
+                </p>
+                <p className="break-all rounded-lg border border-[var(--ps-brd)] bg-white/5 p-2 text-[10px] text-[var(--ps-cyan)]">
+                  {depositAddress}
+                </p>
+                <PrimaryBtn
+                  label="Copy address"
+                  variant="cyan"
+                  onClick={() => {
+                    void copyText(depositAddress).then((ok) =>
+                      onSuccess(ok ? 'Deposit address copied' : 'Copy failed')
+                    );
+                  }}
+                />
+              </>
+            ) : walletLive && chiaAddress && !loadError ? (
+              <p className="text-[10px] text-[var(--ps-dim)]">Loading deposit address…</p>
+            ) : null}
+          </>
+        ) : (
+          <VaultWithdrawForm onSuccess={onSuccess} onError={onSuccess} />
+        )}
       </FormCard>
     </ScreenShell>
   );

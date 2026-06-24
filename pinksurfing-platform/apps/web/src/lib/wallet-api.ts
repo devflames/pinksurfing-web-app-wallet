@@ -1,4 +1,5 @@
 import { getWalletBase } from './api-client';
+import { buildWalletAuthHeaders } from './wallet-ed25519-auth';
 import type {
   AtomicSwap,
   KeyVaultLookup,
@@ -6,6 +7,11 @@ import type {
   WalletHealth,
   WalletProvisionStatus,
 } from './types/wallet';
+
+export type WalletCallerAuth = {
+  chiaAddress: string;
+  signingSk: Uint8Array;
+};
 
 const base = () => getWalletBase();
 
@@ -140,40 +146,216 @@ export type CreateSwapResult = {
   secret?: string;
 };
 
+async function authedSwapFetch<T>(
+  auth: WalletCallerAuth,
+  method: string,
+  routerPath: string,
+  body?: unknown
+): Promise<T> {
+  const headers = await buildWalletAuthHeaders(
+    auth.chiaAddress,
+    auth.signingSk,
+    method,
+    routerPath
+  );
+  const url = `${base()}/swaps${routerPath}`;
+  const res = await fetch(url, {
+    method,
+    headers: { 'Content-Type': 'application/json', ...headers },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+  const parsed = (await res.json().catch(() => ({}))) as T & {
+    status?: string;
+    message?: string;
+  };
+  if (!res.ok || parsed.status === 'error') {
+    throw new Error(parsed.message || res.statusText);
+  }
+  return parsed;
+}
+
 export async function createAtomicSwap(
   payload: CreateSwapPayload,
-  token?: string | null
+  auth: WalletCallerAuth
 ): Promise<CreateSwapResult> {
-  const headers: Record<string, string> = {};
-  if (token) headers.Authorization = `Bearer ${token}`;
-  const res = await walletFetch<{ status: string; data?: CreateSwapResult }>(`${base()}/swaps/create`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(payload),
-  });
+  const res = await authedSwapFetch<{ status: string; data?: CreateSwapResult; message?: string }>(
+    auth,
+    'POST',
+    '/create',
+    payload
+  );
   if (!res.data?.swap) {
     throw new Error('Swap create returned no data');
   }
   return res.data;
 }
 
+export type AcceptSwapPayload = {
+  counterpartyChiaAddress: string;
+  counterpartyBtcPubkey?: string;
+  chiaSweepPubkey?: string;
+  btcRefundPubkey?: string;
+  btcHtlcAddress?: string;
+  btcHtlcRedeemScript?: string;
+  btcHtlcFundingTxid?: string;
+};
+
 export async function acceptAtomicSwap(
   swapId: string,
-  body: { counterpartyChiaAddress: string; counterpartyBtcPubkey?: string },
-  token?: string | null
+  body: AcceptSwapPayload,
+  auth: WalletCallerAuth
 ): Promise<AtomicSwap> {
-  const headers: Record<string, string> = {};
-  if (token) headers.Authorization = `Bearer ${token}`;
-  const res = await walletFetch<{ status: string; data?: AtomicSwap }>(
-    `${base()}/swaps/${encodeURIComponent(swapId)}/accept`,
-    {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body),
-    }
+  const res = await authedSwapFetch<{ status: string; data?: AtomicSwap; message?: string }>(
+    auth,
+    'POST',
+    `/${encodeURIComponent(swapId)}/accept`,
+    body
   );
   if (!res.data) throw new Error('Swap accept returned no data');
   return res.data;
+}
+
+export async function claimAtomicSwap(swapId: string, auth: WalletCallerAuth): Promise<AtomicSwap> {
+  const res = await authedSwapFetch<{ status: string; data?: AtomicSwap }>(
+    auth,
+    'POST',
+    `/${encodeURIComponent(swapId)}/claim`
+  );
+  if (!res.data) throw new Error('Swap claim returned no data');
+  return res.data;
+}
+
+export async function completeAtomicSwap(
+  swapId: string,
+  auth: WalletCallerAuth
+): Promise<AtomicSwap> {
+  const res = await authedSwapFetch<{ status: string; data?: AtomicSwap }>(
+    auth,
+    'POST',
+    `/${encodeURIComponent(swapId)}/complete`
+  );
+  if (!res.data) throw new Error('Swap complete returned no data');
+  return res.data;
+}
+
+export async function refundAtomicSwap(swapId: string, auth: WalletCallerAuth): Promise<AtomicSwap> {
+  const res = await authedSwapFetch<{ status: string; data?: AtomicSwap }>(
+    auth,
+    'POST',
+    `/${encodeURIComponent(swapId)}/refund`
+  );
+  if (!res.data) throw new Error('Swap refund returned no data');
+  return res.data;
+}
+
+export async function cancelAtomicSwap(swapId: string, auth: WalletCallerAuth): Promise<AtomicSwap> {
+  const res = await authedSwapFetch<{ status: string; data?: AtomicSwap }>(
+    auth,
+    'POST',
+    `/${encodeURIComponent(swapId)}/cancel`
+  );
+  if (!res.data) throw new Error('Swap cancel returned no data');
+  return res.data;
+}
+
+export async function updateSwapChiaHtlc(
+  swapId: string,
+  body: { puzzleHash: string; address: string; coinId: string }
+): Promise<AtomicSwap> {
+  const res = await walletFetch<{ status: string; data?: AtomicSwap; message?: string }>(
+    `${base()}/swaps/${encodeURIComponent(swapId)}/chia-htlc`,
+    { method: 'POST', body: JSON.stringify(body) }
+  );
+  if (!res.data) throw new Error('Chia HTLC update returned no data');
+  return res.data;
+}
+
+export async function fetchSwapById(swapId: string): Promise<AtomicSwap | null> {
+  try {
+    const res = await walletFetch<{ status: string; data?: AtomicSwap }>(
+      `${base()}/swaps/${encodeURIComponent(swapId)}`
+    );
+    return res.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export type VaultBalance = {
+  success: boolean;
+  totalBalance?: number;
+  coinCount?: number;
+  depositAddress?: string;
+  message?: string;
+};
+
+export type KeyVaultRecoverResult = {
+  success: boolean;
+  state?: {
+    owner_pubkey?: string;
+    all_cid_hashes?: string[];
+    latest_cid_hash?: string;
+    backup_count?: number;
+  };
+  message?: string;
+};
+
+export type PreparedVaultWithdraw = {
+  success: boolean;
+  coinSpendsJson?: unknown[];
+  signingMessageHex?: string;
+  amount?: number;
+  fee?: number;
+  destination?: string;
+  message?: string;
+};
+
+export async function fetchVaultBalance(launcherId: string): Promise<VaultBalance> {
+  const encoded = encodeURIComponent(launcherId);
+  return walletFetch<VaultBalance>(`${base()}/keyvault/vault/balance/${encoded}`);
+}
+
+export async function fetchVaultDepositInfo(launcherId: string): Promise<{
+  success: boolean;
+  depositAddress?: string;
+  totalBalance?: number;
+  message?: string;
+}> {
+  return walletFetch(`${base()}/keyvault/vault/deposit`, {
+    method: 'POST',
+    body: JSON.stringify({ launcherId }),
+  });
+}
+
+export async function recoverKeyVault(launcherId: string): Promise<KeyVaultRecoverResult> {
+  return walletFetch(`${base()}/keyvault/recover`, {
+    method: 'POST',
+    body: JSON.stringify({ launcherId }),
+  });
+}
+
+export async function prepareVaultWithdraw(body: {
+  launcherId: string;
+  destinationAddress: string;
+  amount: number;
+  ownerPubkeyHex: string;
+  currentCidHashes: string[];
+  feeAmount?: number;
+}): Promise<PreparedVaultWithdraw> {
+  return walletFetch(`${base()}/keyvault/vault/prepare-withdraw`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export async function submitKeyVaultSpend(body: {
+  coinSpendsJson: unknown[];
+  signatureHex: string;
+}): Promise<{ success: boolean; message?: string; status?: unknown }> {
+  return walletFetch(`${base()}/keyvault/submit`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
 }
 
 export type PaychatAskPrice = {
@@ -259,6 +441,23 @@ export function usdToMojosEstimate(usd: number): number {
   const xchPerUsd = Number(process.env.NEXT_PUBLIC_XCH_USD_RATE) || 5;
   const mojos = Math.round((usd / xchPerUsd) * 1_000_000_000_000);
   return Math.max(mojos, 1);
+}
+
+export function usdToBtcEstimate(usd: number): string {
+  const btcPerUsd = Number(process.env.NEXT_PUBLIC_BTC_USD_RATE) || 95000;
+  const btc = usd / btcPerUsd;
+  return btc.toFixed(8);
+}
+
+export function btcEstimateToSats(btc: string): string {
+  const n = Number(btc);
+  if (!Number.isFinite(n)) return '0';
+  return String(Math.floor(n * 100_000_000));
+}
+
+export function mojosToUsd(mojos: number, xchUsd = Number(process.env.NEXT_PUBLIC_XCH_USD_RATE) || 5): number {
+  const xch = mojos / 1_000_000_000_000;
+  return xch * xchUsd;
 }
 
 export function formatXch(mojos: string | number): string {

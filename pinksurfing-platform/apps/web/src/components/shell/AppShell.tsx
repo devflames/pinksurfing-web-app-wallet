@@ -64,6 +64,7 @@ import { contractId } from '@/lib/types/contract';
 import { useLiveChat } from '@/lib/use-live-chat';
 import { useContacts } from '@/lib/use-contacts';
 import { chatTypeForContact, fetchPaychatRoomStatus, isChatLive } from '@/lib/chat-api';
+import { usdToMojosEstimate } from '@/lib/wallet-api';
 import { publishStateEvent, syncContractStatesToThread } from '@/lib/state-message-service';
 import { VAULT_STATE_LABELS } from '@/lib/state-message-types';
 import { CallOverlay } from '@/components/calls/CallOverlay';
@@ -1455,7 +1456,22 @@ export function AppShell() {
               }}
             />
           ) : active.type === 'business' && !active.isGroup && businessView === 'swap' ? (
-            <BtcSwapView onBack={() => setBusinessView('chat')} onInitiate={handleSwapInitiate} />
+            <BtcSwapView
+              onBack={() => setBusinessView('chat')}
+              onInitiate={handleSwapInitiate}
+              vaultUsd={
+                primaryContract?.priceAmount != null &&
+                primaryContract.settlementMode === 'BTC_SWAP'
+                  ? primaryContract.priceAmount
+                  : undefined
+              }
+              xchAmountMojos={
+                primaryContract?.priceAmount != null &&
+                primaryContract.settlementMode === 'BTC_SWAP'
+                  ? String(usdToMojosEstimate(primaryContract.priceAmount))
+                  : undefined
+              }
+            />
           ) : (
             <>
               <MessageThread messages={messages}>

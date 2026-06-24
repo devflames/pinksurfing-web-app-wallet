@@ -2,7 +2,7 @@ export type ExploreScreenId =
   | 'list'
   | 'pay'
   | 'invoice'
-  // | 'deposit' // non-custodial — hidden for now
+  | 'deposit'
   | 'gigs'
   | 'jobs'
   // | 'trade'

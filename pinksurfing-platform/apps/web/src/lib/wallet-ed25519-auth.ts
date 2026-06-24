@@ -42,15 +42,19 @@ export async function buildProfileRegisterAuth(
   };
 }
 
+/** Ed25519 headers for Matt wallet mutating routes (matches auth-middleware legacy format). */
 export async function buildWalletAuthHeaders(
+  chiaAddress: string,
   signingSk: Uint8Array,
   method: string,
-  path: string
+  routerPath: string
 ): Promise<Record<string, string>> {
   const timestamp = String(Date.now());
-  const message = new TextEncoder().encode(`${timestamp}::${method.toUpperCase()}:${path}`);
-  const signature = await ed.sign(sha256(message), signingSk);
+  const payload = `${timestamp}:${method.toUpperCase()}:${routerPath}`;
+  const message = sha256(new TextEncoder().encode(payload));
+  const signature = await ed.sign(message, signingSk);
   return {
+    'X-Auth-Address': chiaAddress,
     'X-Auth-Timestamp': timestamp,
     'X-Auth-Signature': toBase64(signature),
   };

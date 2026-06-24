@@ -11,8 +11,8 @@ async function walletSkFromSeed(seed: Uint8Array) {
   return deriveChildSkUnhardened(sk, 0);
 }
 
-/** Aggregate BLS signature for a PayChat offer spend bundle. */
-export async function signPaychatOfferMessages(
+/** Aggregate BLS signature for coin spend bundles (PayChat, KeyVault withdraw, etc.). */
+export async function signBlsCoinSpends(
   mnemonic: string,
   signingMessageHex: string,
   extraSigningMessagesHex: string[] = []
@@ -31,4 +31,13 @@ export async function signPaychatOfferMessages(
   const aggregated =
     signatures.length === 1 ? signatures[0] : AugSchemeMPL.aggregate(signatures);
   return aggregated.toHex();
+}
+
+/** @deprecated Use signBlsCoinSpends */
+export async function signPaychatOfferMessages(
+  mnemonic: string,
+  signingMessageHex: string,
+  extraSigningMessagesHex: string[] = []
+): Promise<string> {
+  return signBlsCoinSpends(mnemonic, signingMessageHex, extraSigningMessagesHex);
 }

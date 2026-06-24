@@ -5,6 +5,7 @@ import {
   fetchKeyVaultStatus,
   fetchOpenSwaps,
   fetchSwapsForAddress,
+  fetchVaultBalance,
   fetchWalletInfo,
   formatBtc,
   formatXch,
@@ -13,6 +14,8 @@ import {
 import { getWalletBase } from '@/lib/api-client';
 import type { AtomicSwap, KeyVaultStatus, WalletHealth } from '@/lib/types/wallet';
 import { WalletIdentityCard } from '@/components/wallet/WalletIdentityCard';
+import { VaultWithdrawForm } from '@/components/wallet/VaultWithdrawForm';
+import { SwapActionsPanel } from '@/components/wallet/SwapActionsPanel';
 import { useWalletIdentity } from '@/hooks/use-wallet-identity';
 
 export function WalletPanel() {
@@ -23,8 +26,10 @@ export function WalletPanel() {
   const [mySwaps, setMySwaps] = useState<AtomicSwap[]>([]);
   const [launcherId, setLauncherId] = useState<string | null>(null);
   const [vaultStatus, setVaultStatus] = useState<KeyVaultStatus | null>(null);
+  const [vaultBalanceMojos, setVaultBalanceMojos] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [vaultMessage, setVaultMessage] = useState<string | null>(null);
+  const [showWithdraw, setShowWithdraw] = useState(false);
 
   const loadWallet = useCallback(async () => {
     if (!walletLive) return;
@@ -50,6 +55,7 @@ export function WalletPanel() {
       setMySwaps([]);
       setLauncherId(null);
       setVaultStatus(null);
+      setVaultBalanceMojos(null);
       return;
     }
     setVaultMessage(null);
@@ -61,17 +67,25 @@ export function WalletPanel() {
       setMySwaps(swaps);
       if (lookup.success && lookup.launcherId) {
         setLauncherId(lookup.launcherId);
-        const status = await fetchKeyVaultStatus(lookup.launcherId);
+        const [status, balance] = await Promise.all([
+          fetchKeyVaultStatus(lookup.launcherId),
+          fetchVaultBalance(lookup.launcherId),
+        ]);
         setVaultStatus(status);
+        if (balance.success && balance.totalBalance != null) {
+          setVaultBalanceMojos(balance.totalBalance);
+        }
       } else {
         setLauncherId(null);
         setVaultStatus(null);
+        setVaultBalanceMojos(null);
         setVaultMessage(lookup.message || 'No KeyVault for this address');
       }
     } catch (e) {
       setVaultMessage(e instanceof Error ? e.message : 'KeyVault lookup failed');
       setLauncherId(null);
       setVaultStatus(null);
+      setVaultBalanceMojos(null);
     }
   }, [chiaAddress, walletLive]);
 
@@ -83,6 +97,11 @@ export function WalletPanel() {
     const t = setTimeout(loadVaultAndSwaps, 400);
     return () => clearTimeout(t);
   }, [loadVaultAndSwaps]);
+
+  const refreshAll = () => {
+    loadWallet();
+    loadVaultAndSwaps();
+  };
 
   const pythonOk = health?.keyvault?.python?.success !== false;
 
@@ -98,10 +117,7 @@ export function WalletPanel() {
             </div>
             <button
               type="button"
-              onClick={() => {
-                loadWallet();
-                loadVaultAndSwaps();
-              }}
+              onClick={refreshAll}
               disabled={loading}
               className="text-[9px] text-[var(--ps-dim)] hover:text-[var(--ps-white)]"
             >
@@ -149,6 +165,18 @@ export function WalletPanel() {
                 <div className="text-[var(--ps-cyan)]">
                   {vaultStatus?.status ?? vaultStatus?.message ?? 'unknown'}
                 </div>
+                {vaultBalanceMojos != null && (
+                  <div className="mt-0.5 text-[var(--ps-white)]">
+                    Balance: {formatXch(vaultBalanceMojos)} XCH
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setShowWithdraw((v) => !v)}
+                  className="mt-1 text-[9px] text-[var(--ps-cyan)] underline"
+                >
+                  {showWithdraw ? 'Hide withdraw' : 'Withdraw from vault'}
+                </button>
               </div>
             ) : (
               <p className="text-[var(--ps-dim)]">
@@ -157,13 +185,19 @@ export function WalletPanel() {
             )}
           </div>
 
+          {showWithdraw && launcherId && (
+            <div className="mb-3 rounded border border-[var(--ps-brd)] p-2">
+              <VaultWithdrawForm compact onSuccess={refreshAll} />
+            </div>
+          )}
+
           <div className="mb-2">
             <div className="mb-1 text-[9px] uppercase tracking-wide text-[var(--ps-muted)]">
               Open BTC swaps ({openSwaps.length})
             </div>
             <div className="space-y-1.5">
               {openSwaps.slice(0, 5).map((s) => (
-                <SwapRow key={s.id} swap={s} />
+                <SwapRow key={s.id} swap={s} onUpdated={refreshAll} showActions />
               ))}
               {openSwaps.length === 0 && !healthError && (
                 <p className="text-[10px] text-[var(--ps-dim)]">No open offers</p>
@@ -177,8 +211,8 @@ export function WalletPanel() {
                 Your swaps ({mySwaps.length})
               </div>
               <div className="space-y-1.5">
-                {mySwaps.slice(0, 3).map((s) => (
-                  <SwapRow key={s.id} swap={s} />
+                {mySwaps.slice(0, 5).map((s) => (
+                  <SwapRow key={s.id} swap={s} onUpdated={refreshAll} mine />
                 ))}
               </div>
             </div>
@@ -187,7 +221,7 @@ export function WalletPanel() {
       ) : (
         <p className="mt-2 text-[9px] text-[var(--ps-dim)]">
           Set <code className="text-[8px]">NEXT_PUBLIC_WALLET_LIVE=true</code> for live KeyVault
-          lookup and atomic swaps.
+          lookup, withdraw, and atomic swaps.
         </p>
       )}
 
@@ -196,7 +230,17 @@ export function WalletPanel() {
   );
 }
 
-function SwapRow({ swap }: { swap: AtomicSwap }) {
+function SwapRow({
+  swap,
+  onUpdated,
+  mine,
+  showActions,
+}: {
+  swap: AtomicSwap;
+  onUpdated: () => void;
+  mine?: boolean;
+  showActions?: boolean;
+}) {
   const dir = swap.direction === 'xch_to_btc' ? 'XCH → BTC' : 'BTC → XCH';
   return (
     <div className="rounded border border-[var(--ps-brd)] bg-[var(--ps-card)] p-2 text-[10px]">
@@ -207,6 +251,7 @@ function SwapRow({ swap }: { swap: AtomicSwap }) {
       <div className="mt-0.5 text-[var(--ps-white)]">
         {formatXch(swap.xchAmountMojos)} XCH ↔ {formatBtc(swap.btcAmountSats)} BTC
       </div>
+      {(mine || showActions) && <SwapActionsPanel swap={swap} onUpdated={onUpdated} />}
     </div>
   );
 }

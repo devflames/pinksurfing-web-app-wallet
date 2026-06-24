@@ -2,7 +2,7 @@
 
 import { useShellNav } from '@/lib/shell-nav-context';
 import {
-  // DepositWithdrawScreen, // non-custodial — hidden for now
+  DepositWithdrawScreen,
   InvoiceScreen,
   ListingsScreen,
   PayReceiveScreen,
@@ -22,7 +22,7 @@ const TILES: {
 }[] = [
   { id: 'pay', title: 'Pay and Receive', featured: true, desc: 'Send or request payments', icon: '💸' },
   { id: 'invoice', title: 'Create Invoice', featured: true, desc: 'Bill clients on-platform', icon: '📄' },
-  // { id: 'deposit', title: 'Deposit and Withdraw', desc: 'Move funds in/out', icon: '🏦' },
+  { id: 'deposit', title: 'Deposit and Withdraw', desc: 'KeyVault XCH in/out', icon: '🏦' },
   { id: 'mall', title: 'Shopping Mall and Marketplace', desc: 'Browse vendors on Shop', icon: '🛍' },
   { id: 'sell', title: 'Sell Item / Create your shop', desc: 'Open your storefront', icon: '🏪' },
   // { id: 'trade', title: 'Trade Arena', desc: 'Swap and trade assets', icon: '📈' },
@@ -86,9 +86,9 @@ export function ExploreView({ screen, onScreenChange }: Props) {
   if (screen === 'invoice') {
     return <InvoiceScreen onBack={back} />;
   }
-  // if (screen === 'deposit') {
-  //   return <DepositWithdrawScreen onBack={back} onSuccess={toast} />;
-  // }
+  if (screen === 'deposit') {
+    return <DepositWithdrawScreen onBack={back} onSuccess={toast} />;
+  }
   // if (screen === 'trade') {
   //   return (
   //     <SimpleFeatureScreen
