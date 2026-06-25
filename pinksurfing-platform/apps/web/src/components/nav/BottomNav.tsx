@@ -13,7 +13,7 @@ type NavItem = {
 };
 
 const ITEMS: NavItem[] = [
-  { id: 'home', label: 'Home', icon: '⌂' },
+  { id: 'home', label: 'Home', imageSrc: '/logo.jpeg' },
   { id: 'paychat', label: 'PayChat', imageSrc: '/nav/paychat.png' },
   { id: 'shop', label: 'Shop', imageSrc: '/nav/shop.png' },
   { id: 'share', label: 'Share', imageSrc: '/nav/share.png' },
