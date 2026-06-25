@@ -1,5 +1,5 @@
 import type { BusinessAvatarRing } from '@/lib/business-chat-ring';
-import { businessAvatarRingClass } from '@/lib/business-chat-ring';
+import { AvatarRing } from '@/components/contracts/AvatarRing';
 
 type Props = {
   urls: string[];
@@ -23,11 +23,9 @@ export function GroupAvatar({
   const cells = [...urls.slice(0, 4)];
   while (cells.length < 4) cells.push(FALLBACK);
 
-  const ringCls = businessRing ? businessAvatarRingClass(businessRing) : '';
-
   const inner = (
     <div
-      className={`relative shrink-0 overflow-hidden rounded-full border border-white/10 bg-[var(--ps-card)] shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_4px_14px_rgba(0,0,0,0.45)] backdrop-blur-sm ${ringCls}`}
+      className="relative overflow-hidden rounded-full border border-white/10 bg-[var(--ps-card)] shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_4px_14px_rgba(0,0,0,0.45)] backdrop-blur-sm"
       style={{ width: size, height: size }}
     >
       <div className="grid h-full w-full grid-cols-2 grid-rows-2 gap-px bg-black/80 p-px">
@@ -43,6 +41,12 @@ export function GroupAvatar({
     </div>
   );
 
+  const wrapped = (
+    <AvatarRing ring={businessRing} size={size}>
+      {inner}
+    </AvatarRing>
+  );
+
   if (onClick) {
     return (
       <button
@@ -51,16 +55,14 @@ export function GroupAvatar({
           e.stopPropagation();
           onClick();
         }}
-        className={`shrink-0 rounded-full transition-all ${
-          businessRing ? '' : 'ring-2 ring-transparent hover:ring-[#9747ff]/50'
-        }`}
+        className="shrink-0 rounded-full transition-opacity hover:opacity-90"
         title={title}
         aria-label={title}
       >
-        {inner}
+        {wrapped}
       </button>
     );
   }
 
-  return inner;
+  return wrapped;
 }

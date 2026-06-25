@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   createPaychatPaymentLink,
   fetchPaychatRoomStatus,
+  grantPaychatVaultUnlock,
 } from '@/lib/chat-api';
 import { formatXch } from '@/lib/wallet-api';
 import { payPaychatViaVault } from '@/lib/paychat-vault-payment';
@@ -156,6 +157,7 @@ export function PayChatCheckoutModal({
         memo: `PayChat unlock — ${name}`,
       });
       setVaultMojos(result.amountMojos);
+      await grantPaychatVaultUnlock(token, fromUserId, toUserId, result.offerId);
       const unlocked = await checkAccess();
       if (!unlocked) {
         successRef.current = true;
@@ -277,8 +279,8 @@ export function PayChatCheckoutModal({
               {phase === 'vault-busy' ? 'Signing & broadcasting…' : `Pay via vault · ${amountLabel}`}
             </button>
             <p className="mt-2 text-[9px] text-[var(--ps-dim)]">
-              Square unlocks chat on the server instantly. Vault sends XCH on-chain; chat may unlock
-              after the recipient confirms or if their ask price is zero.
+              Square unlocks chat on the server instantly. Vault sends XCH on-chain and unlocks
+              PayChat on the server after payment.
             </p>
           </>
         )}

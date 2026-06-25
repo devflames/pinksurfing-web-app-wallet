@@ -123,3 +123,24 @@ export function formatDate(iso?: string): string {
     year: 'numeric',
   });
 }
+
+/** Hex color for avatar ring segment — matches contract card lifecycle color */
+const STATE_RING_HEX: Partial<Record<ContractState, string>> = {
+  DRAFT: '#6B4C80',
+  PENDING_APPROVAL: '#EF9F27',
+  APPROVED: '#5DCAA5',
+  PAID_OFF_PLATFORM: '#6EE7FF',
+  ESCROW_FUNDING_INITIATED: '#EF9F27',
+  ESCROW_FUNDED: '#6EE7FF',
+  IN_PROGRESS: '#FF7AD1',
+  EVIDENCE_SUBMITTED: '#AFA9EC',
+  VERIFIED: '#5DCAA5',
+  COMPLETED: '#5DCAA5',
+  DISPUTED: '#E24B4A',
+  CANCELLED: '#6B4C80',
+  LAPSED: '#6B4C80',
+};
+
+export function stateRingHex(state: ContractState): string {
+  return STATE_RING_HEX[state] ?? '#9747ff';
+}

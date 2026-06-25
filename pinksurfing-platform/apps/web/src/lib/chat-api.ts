@@ -458,6 +458,27 @@ export async function createPaychatPaymentLink(
   return url;
 }
 
+/** Grant PayChat access after on-chain vault payment (server-side unlock). */
+export async function grantPaychatVaultUnlock(
+  token: string,
+  fromUserId: string,
+  toUserId: string,
+  txId?: string
+): Promise<void> {
+  const res = await fetch(`${CHAT_BASE}/chats/paychat/vault-unlock`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ from: fromUserId, to: toUserId, txId }),
+  });
+  const body = (await res.json().catch(() => ({}))) as SimpleApiResponse;
+  if (!res.ok || body.status !== 'success') {
+    throw new Error(body.message ?? 'Could not unlock PayChat after vault payment');
+  }
+}
+
 export async function addPaychatContactByPspayId(token: string, pspayId: string): Promise<void> {
   const res = await fetch(`${CHAT_BASE}/chats/paychat/addContact`, {
     method: 'POST',

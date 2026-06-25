@@ -99,9 +99,9 @@ import { resolveRecipientChiaAddress } from '@/lib/paychat-vault-payment';
 import { loadWalletIdentity } from '@/lib/wallet-identity-storage';
 import { executeQrJoin } from '@/lib/qr-join-service';
 import type { BusinessCardSnapshot } from '@/lib/business-card-types';
+import { AvatarRing } from '@/components/contracts/AvatarRing';
 import {
   businessAvatarRing,
-  businessAvatarRingClass,
   contractsForBusinessContact,
   type BusinessAvatarRing,
 } from '@/lib/business-chat-ring';
@@ -139,11 +139,10 @@ function Avatar({
   clickable?: boolean;
   businessRing?: BusinessAvatarRing;
 }) {
-  const ringCls = businessRing ? businessAvatarRingClass(businessRing) : '';
   const inner = (
     <div
-      className={`flex shrink-0 items-center justify-center rounded-full text-[11px] font-medium ${ringCls} ${
-        clickable && !businessRing
+      className={`flex shrink-0 items-center justify-center rounded-full text-[11px] font-medium ${
+        clickable && (!businessRing || businessRing === 'none')
           ? 'ring-2 ring-transparent transition-all hover:ring-[var(--ps-green)]/50'
           : clickable
             ? 'transition-opacity hover:opacity-90'
@@ -162,6 +161,12 @@ function Avatar({
     </div>
   );
 
+  const wrapped = (
+    <AvatarRing ring={businessRing} size={size}>
+      {inner}
+    </AvatarRing>
+  );
+
   if (clickable && onClick) {
     return (
       <button
@@ -173,12 +178,12 @@ function Avatar({
         className="shrink-0 rounded-full"
         title="View business profile"
       >
-        {inner}
+        {wrapped}
       </button>
     );
   }
 
-  return inner;
+  return wrapped;
 }
 
 function ContactRow({
@@ -519,10 +524,14 @@ export function AppShell() {
     if (effectiveTab !== 'business') return {} as Record<string, BusinessAvatarRing>;
     const map: Record<string, BusinessAvatarRing> = {};
     for (const c of getContactsForTab('business')) {
-      map[c.id] = businessAvatarRing(contractsForBusinessContact(c.id));
+      const contractList =
+        active?.type === 'business' && active.id === c.id && contracts.length > 0
+          ? contracts
+          : contractsForBusinessContact(c.id);
+      map[c.id] = businessAvatarRing(contractList);
     }
     return map;
-  }, [effectiveTab, getContactsForTab, contracts]);
+  }, [effectiveTab, getContactsForTab, contracts, active?.id, active?.type]);
   const paychatUnlocked =
     active?.type === 'paychat' &&
     (paychatDir(active) === 'incoming' || active.unlocked || unlockedPaychat[active.id]);
