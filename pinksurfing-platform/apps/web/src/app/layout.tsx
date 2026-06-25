@@ -14,8 +14,9 @@ export const metadata: Metadata = {
   title: 'PinkSurfing',
   description: 'Unified messaging, contracts, and wallet platform',
   icons: {
-    icon: [{ url: '/icon.svg', type: 'image/svg+xml' }],
-    apple: [{ url: '/icon.svg', type: 'image/svg+xml' }],
+    icon: [{ url: '/logo.jpeg', type: 'image/jpeg' }],
+    apple: [{ url: '/logo.jpeg', type: 'image/jpeg' }],
+    shortcut: ['/logo.jpeg'],
   },
 };
 

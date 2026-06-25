@@ -51,7 +51,7 @@ export async function buildWalletAuthHeaders(
 ): Promise<Record<string, string>> {
   const timestamp = String(Date.now());
   const payload = `${timestamp}:${method.toUpperCase()}:${routerPath}`;
-  const message = sha256(new TextEncoder().encode(payload));
+  const message = new TextEncoder().encode(payload);
   const signature = await ed.sign(message, signingSk);
   return {
     'X-Auth-Address': chiaAddress,

@@ -4,6 +4,8 @@ import type { DirectoryBusiness } from '@/lib/ps-business-directory';
 export type BusinessContactRequest = {
   id: string;
   fromName: string;
+  fromUserId?: string;
+  toUserId?: string;
   toBusinessId: string;
   toBusinessName: string;
   toContactName: string;

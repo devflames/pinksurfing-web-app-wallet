@@ -18,6 +18,8 @@ import { PayChatDialOverlay } from '@/components/paychat/PayChatDialOverlay';
 import { PayChatDirectionTabs } from '@/components/paychat/PayChatDirectionTabs';
 import { SquareCheckoutModal } from '@/components/paychat/SquareCheckoutModal';
 import { PayChatCheckoutModal } from '@/components/paychat/PayChatCheckoutModal';
+import { ContractSquareCheckoutModal } from '@/components/contracts/ContractSquareCheckoutModal';
+import { useEdgeSwipeOpen } from '@/lib/use-edge-swipe';
 import { loadPayChatSettings, savePayChatSettings } from '@/lib/paychat-settings-storage';
 import { formatPaychatPrice, paychatPriceForStep } from '@/lib/paychat-pricing';
 import { WalletPanel } from '@/components/wallet/WalletPanel';
@@ -86,6 +88,7 @@ import {
   loadBusinessRequests,
   type BusinessContactRequest,
 } from '@/lib/business-contact-requests';
+import { fetchBusinessRequests } from '@/lib/business-contact-requests-api';
 import {
   loadStartedPersonalIds,
   resolveSavedOrDemo,
@@ -456,8 +459,14 @@ export function AppShell() {
   }, [user?.email]);
 
   useEffect(() => {
+    if (isChatLive() && token) {
+      void fetchBusinessRequests(token)
+        .then(setBusinessRequests)
+        .catch(() => setBusinessRequests([]));
+      return;
+    }
     setBusinessRequests(loadBusinessRequests(user?.email ?? 'guest'));
-  }, [user?.email]);
+  }, [user?.email, token]);
 
   useEffect(() => {
     if (section !== 'home') setHomeMainOverlay(null);
@@ -730,6 +739,13 @@ export function AppShell() {
     section === 'home' &&
     (!!homeMainOverlay || (!!active?.isGroup && groupEditMode));
 
+  const openMobileContacts = useCallback(() => setMobileChatFocused(false), []);
+
+  const edgeSwipe = useEdgeSwipeOpen(
+    openMobileContacts,
+    isMobile && isChatSection && mobileChatFocused && !homePanelActive
+  );
+
   useEffect(() => {
     if (!isChatSection) setMobileChatFocused(false);
   }, [isChatSection]);
@@ -954,6 +970,7 @@ export function AppShell() {
   };
 
   const confirmSquarePayment = async () => {
+    // Demo-only fallback when contracts are not live.
     if (!squareContract || !token || !userId) return;
     const c = squareContract;
     setSquareContract(null);
@@ -969,6 +986,30 @@ export function AppShell() {
       setActingId(null);
     }
   };
+
+  const handleContractSquareSuccess = async () => {
+    if (!squareContract || !token || !bizConv) return;
+    const c = squareContract;
+    setSquareContract(null);
+    setActingId(contractId(c));
+    try {
+      const updated = await loadContractsByConversation(token, bizConv.conversationId);
+      setContracts(updated);
+      if (chatLive) void reloadChat();
+    } catch (e) {
+      setContractsError(e instanceof Error ? e.message : 'Payment failed');
+    } finally {
+      setActingId(null);
+    }
+  };
+
+  const refreshBusinessRequests = useCallback(() => {
+    if (isChatLive() && token) {
+      void fetchBusinessRequests(token).then(setBusinessRequests).catch(() => {});
+      return;
+    }
+    setBusinessRequests(loadBusinessRequests(user?.email ?? 'guest'));
+  }, [token, user?.email]);
 
   const confirmPaychatPayment = () => {
     if (!paychatCheckout) return;
@@ -1076,7 +1117,7 @@ export function AppShell() {
     <BusinessRequestAcceptanceWatcher
       email={user?.email ?? 'guest'}
       requests={businessRequests}
-      onRefresh={() => setBusinessRequests(loadBusinessRequests(user?.email ?? 'guest'))}
+      onRefresh={refreshBusinessRequests}
       onOpenRequests={() => {
         setHomeMainOverlay('find');
         handleNavigate('home');
@@ -1285,18 +1326,21 @@ export function AppShell() {
           className={`relative flex min-w-0 flex-1 flex-col ${
             mobileChatFocused ? 'max-md:flex' : 'max-md:hidden md:flex'
           }`}
+          onTouchStart={edgeSwipe.onTouchStart}
+          onTouchMove={edgeSwipe.onTouchMove}
+          onTouchEnd={edgeSwipe.onTouchEnd}
         >
           {homePanelActive ? (
             <>
               {homeMainOverlay === 'find' && (
                 <FindPeopleOverlay
                   user={user}
+                  token={token}
+                  userId={userId}
                   displayName={displayName(user)}
                   requests={businessRequests}
                   onClose={() => setHomeMainOverlay(null)}
-                  onRefresh={() =>
-                    setBusinessRequests(loadBusinessRequests(user?.email ?? 'guest'))
-                  }
+                  onRefresh={refreshBusinessRequests}
                   onRequestsChange={setBusinessRequests}
                   onOpenPaychat={() => {
                     setHomeMainOverlay(null);
@@ -1556,15 +1600,24 @@ export function AppShell() {
             />
           )}
 
-          {squareContract && (
-            <SquareCheckoutModal
-              mode="contract"
-              open
-              contract={squareContract}
-              onClose={() => setSquareContract(null)}
-              onConfirm={confirmSquarePayment}
-            />
-          )}
+          {squareContract &&
+            (isContractsLive() && token ? (
+              <ContractSquareCheckoutModal
+                open
+                contract={squareContract}
+                token={token}
+                onClose={() => setSquareContract(null)}
+                onSuccess={() => void handleContractSquareSuccess()}
+              />
+            ) : (
+              <SquareCheckoutModal
+                mode="contract"
+                open
+                contract={squareContract}
+                onClose={() => setSquareContract(null)}
+                onConfirm={confirmSquarePayment}
+              />
+            ))}
 
           {paychatCheckoutError && (
             <div className="border-b border-[var(--ps-pink)]/30 bg-[var(--ps-pink)]/10 px-3 py-2 text-[10px] text-[var(--ps-pink)]">

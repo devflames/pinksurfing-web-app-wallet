@@ -56,9 +56,11 @@ export function LoginScreen() {
   return (
     <div className="w-full max-w-sm rounded-xl border border-[var(--ps-brd)] bg-[var(--ps-surf)]/90 p-6 shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur-sm">
       <div className="mb-5 text-center">
-        <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full ps-gradient-border bg-[var(--ps-surf)] text-xl font-bold text-[var(--ps-primary)]">
-          P
-        </div>
+        <img
+          src="/logo.jpeg"
+          alt="PinkSurfing"
+          className="mx-auto mb-3 h-16 w-16 rounded-2xl object-cover shadow-[0_8px_32px_rgba(244,114,182,0.25)]"
+        />
         <h1 className="text-[22px] font-semibold text-[var(--ps-white)]">PinkSurfing</h1>
         <p className="mt-1 text-[11px] text-[var(--ps-muted)]">
           {localMode ? 'Local Raihan stack (your branch changes)' : 'Sign in with production account'}

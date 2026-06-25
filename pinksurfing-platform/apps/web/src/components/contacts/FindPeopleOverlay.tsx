@@ -12,6 +12,16 @@ import {
   type BusinessContactRequest,
 } from '@/lib/business-contact-requests';
 import {
+  approveBusinessRequestApi,
+  declineBusinessRequestApi,
+  fetchBusinessRequests,
+  hasPendingRequestLive,
+  incomingRequestsLive,
+  outgoingRequestsLive,
+  sendBusinessRequestApi,
+} from '@/lib/business-contact-requests-api';
+import { isChatLive } from '@/lib/chat-api';
+import {
   discoverCatalog,
   defaultDiscoverFilters,
   filterDiscoverPeople,
@@ -36,6 +46,8 @@ type Tab = 'discover' | 'requests';
 
 type Props = {
   user: SessionUser | null;
+  token?: string | null;
+  userId?: string | null;
   displayName: string;
   requests: BusinessContactRequest[];
   onClose: () => void;
@@ -44,6 +56,12 @@ type Props = {
   onOpenPaychat: () => void;
   onVisitProfile: (contactId: string) => void;
 };
+
+function peerUserIdFromPerson(p: DiscoverPerson): string | undefined {
+  if (p.userId) return p.userId;
+  if (p.contactId?.startsWith('live-')) return p.contactId.slice(5);
+  return undefined;
+}
 
 function toDirectory(p: DiscoverPerson): DirectoryBusiness {
   return {
@@ -63,6 +81,8 @@ function toDirectory(p: DiscoverPerson): DirectoryBusiness {
 
 export function FindPeopleOverlay({
   user,
+  token,
+  userId,
   displayName,
   requests,
   onClose,
@@ -74,6 +94,7 @@ export function FindPeopleOverlay({
   const email = user?.email ?? 'guest';
   const myPayId = paychatInviteCodeForUser(user);
   const myIndustry = profileForUser(user, DEFAULT_PROFILE).industry;
+  const live = isChatLive() && !!token && !!userId;
 
   const [tab, setTab] = useState<Tab>('discover');
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -83,8 +104,14 @@ export function FindPeopleOverlay({
     defaultDiscoverFilters(loadFindZip(email))
   );
 
-  const incoming = useMemo(() => incomingRequests(email), [email, requests]);
-  const outgoing = useMemo(() => outgoingRequests(email), [email, requests]);
+  const incoming = useMemo(
+    () => (live && userId ? incomingRequestsLive(requests, userId) : incomingRequests(email)),
+    [email, live, requests, userId]
+  );
+  const outgoing = useMemo(
+    () => (live && userId ? outgoingRequestsLive(requests, userId) : outgoingRequests(email)),
+    [email, live, requests, userId]
+  );
 
   useEffect(() => {
     if (incoming.length > 0) setTab('requests');
@@ -115,7 +142,28 @@ export function FindPeopleOverlay({
     setSelectedId((prev) => (prev === id ? null : id));
   };
 
-  const submitRequest = (person: DiscoverPerson) => {
+  const submitRequest = async (person: DiscoverPerson) => {
+    if (live && token) {
+      const toUserId = peerUserIdFromPerson(person);
+      if (!toUserId) {
+        window.alert('This listing is demo-only — connect via QR for live contacts.');
+        return;
+      }
+      await sendBusinessRequestApi(token, {
+        toUserId,
+        toBusinessId: person.id,
+        toBusinessName: person.businessName,
+        toContactName: person.name,
+        industry: person.industry,
+        industryCategory: person.industryCategory,
+        paychatId: person.paychatId,
+        fromName: displayName,
+        message: `Request to connect with ${person.businessName} via PinkSurfing search.`,
+      });
+      const next = await fetchBusinessRequests(token);
+      onRequestsChange(next);
+      return;
+    }
     const next = sendBusinessRequest(email, toDirectory(person), displayName, myPayId);
     onRequestsChange(next);
   };
@@ -128,12 +176,25 @@ export function FindPeopleOverlay({
     submitRequest(person);
   };
 
-  const handleApprove = (id: string) => {
+  const handleApprove = async (id: string) => {
+    if (live && token) {
+      await approveBusinessRequestApi(token, id);
+      const next = await fetchBusinessRequests(token);
+      onRequestsChange(next);
+      onRefresh();
+      return;
+    }
     const next = approveBusinessRequest(email, id);
     onRequestsChange(next);
   };
 
-  const handleDecline = (id: string) => {
+  const handleDecline = async (id: string) => {
+    if (live && token) {
+      await declineBusinessRequestApi(token, id);
+      const next = await fetchBusinessRequests(token);
+      onRequestsChange(next);
+      return;
+    }
     const next = declineBusinessRequest(email, id);
     onRequestsChange(next);
   };
@@ -205,7 +266,14 @@ export function FindPeopleOverlay({
               connected={
                 selected.contactId ? isContactJoined('business', selected.contactId) : false
               }
-              requestSent={hasPendingRequest(email, selected.id)}
+              requestSent={
+                live && selected
+                  ? hasPendingRequestLive(
+                      requests,
+                      peerUserIdFromPerson(selected) ?? selected.id
+                    )
+                  : hasPendingRequest(email, selected.id)
+              }
               onRequest={
                 selected.contactId && isContactJoined('business', selected.contactId)
                   ? undefined

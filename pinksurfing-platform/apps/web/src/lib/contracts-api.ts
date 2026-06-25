@@ -65,3 +65,33 @@ export async function executeContractAction(
   if (!res.data) throw new Error(res.message || 'Action failed');
   return res.data;
 }
+
+export async function fetchContractById(
+  token: string,
+  contractId: string
+): Promise<BusinessContract> {
+  const res = await apiFetch<ApiResponse<BusinessContract>>(
+    `${base()}/get?contractId=${encodeURIComponent(contractId)}`,
+    { method: 'GET', token }
+  );
+  if (!res.data) throw new Error(res.message || 'Contract not found');
+  return res.data;
+}
+
+export async function createContractPaymentLink(
+  token: string,
+  contractId: string
+): Promise<string> {
+  const res = await apiFetch<{
+    status: string;
+    data?: { paymentLink?: { url?: string; longUrl?: string } };
+    message?: string;
+  }>(`${base()}/create-payment-link`, {
+    method: 'POST',
+    token,
+    body: JSON.stringify({ contractId }),
+  });
+  const url = res.data?.paymentLink?.url || res.data?.paymentLink?.longUrl;
+  if (!url) throw new Error(res.message || 'No payment URL returned');
+  return url;
+}

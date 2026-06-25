@@ -24,6 +24,7 @@ export type DiscoverPerson = {
   paychatId: string;
   verified: boolean;
   contactId?: string;
+  userId?: string;
   aboutMe?: string;
   dealsInterestedIn?: string[];
   coldContactLikelihood: ColdContactLikelihood;
