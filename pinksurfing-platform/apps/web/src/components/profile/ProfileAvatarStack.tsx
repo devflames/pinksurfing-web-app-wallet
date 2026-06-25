@@ -17,7 +17,8 @@ type Props = {
   user: SessionUser | null;
   personalLabel: string;
   businessLabel: string;
-  mode: 'personal' | 'business';
+  /** Which photo is in front in the Me section stack (local display only). */
+  frontPhoto?: 'personal' | 'business';
   onSwap: () => void;
   variant?: 'header' | 'nav';
   onOpenSettings?: () => void;
@@ -118,12 +119,12 @@ export function ProfileAvatarStack({
   user,
   personalLabel,
   businessLabel,
-  mode,
+  frontPhoto = 'personal',
   onSwap,
   variant = 'header',
   onOpenSettings,
 }: Props) {
-  const personalActive = mode === 'personal';
+  const personalInFront = frontPhoto === 'personal';
   const personalImg = profileAvatarUrl(user);
   const businessImg = businessLogoUrl(user);
 
@@ -137,7 +138,7 @@ export function ProfileAvatarStack({
     );
   }
 
-  const activeLabel = personalActive ? personalLabel : businessLabel;
+  const activeLabel = personalInFront ? personalLabel : businessLabel;
   const stackWidth = AVATAR_SIZE + SHIFT;
 
   return (
@@ -149,7 +150,7 @@ export function ProfileAvatarStack({
               label={businessLabel}
               imageUrl={businessImg}
               size={AVATAR_SIZE}
-              active={!personalActive}
+              active={!personalInFront}
             />
           </div>
           <div className="absolute top-0" style={{ left: SHIFT }}>
@@ -157,7 +158,7 @@ export function ProfileAvatarStack({
               label={personalLabel}
               imageUrl={personalImg}
               size={AVATAR_SIZE}
-              active={personalActive}
+              active={personalInFront}
             />
           </div>
           {onOpenSettings && (
@@ -179,7 +180,8 @@ export function ProfileAvatarStack({
       <button
         type="button"
         onClick={onSwap}
-        aria-label="Swap personal and business profile"
+        aria-label="Swap which photo is in front"
+        title="Swap which photo is in front (Me section only)"
         className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[var(--ps-brd)] bg-[var(--ps-surf)] text-[var(--ps-muted)] transition-colors hover:border-[var(--ps-cyan)]/40 hover:text-[var(--ps-cyan)]"
       >
         <span className="text-lg leading-none">⇄</span>

@@ -78,6 +78,7 @@ import { GroupAvatar } from '@/components/groups/GroupAvatar';
 import { groupAvatarUrlsFor, loadGroupMemberIds } from '@/lib/group-teams';
 import { HomeSidebarActions } from '@/components/contacts/HomeSidebarActions';
 import { StartChatOverlay } from '@/components/contacts/StartChatOverlay';
+import { BusinessRequestAcceptanceWatcher } from '@/components/contacts/BusinessRequestAcceptanceWatcher';
 import { QrAddIcon } from '@/components/icons/QrAddIcon';
 import { useContactPreview } from '@/lib/use-chat-session';
 import {
@@ -1102,6 +1103,15 @@ export function AppShell() {
 
   return (
     <ShellNavProvider section={section} shopMode={shopMode} onNavigate={handleNavigate}>
+    <BusinessRequestAcceptanceWatcher
+      email={user?.email ?? 'guest'}
+      requests={businessRequests}
+      onRefresh={() => setBusinessRequests(loadBusinessRequests(user?.email ?? 'guest'))}
+      onOpenRequests={() => {
+        setHomeMainOverlay('find');
+        handleNavigate('home');
+      }}
+    />
     <ShellChrome>
     <BuildTabTitle sectionLabel={SECTION_TITLES[section]} />
     <div

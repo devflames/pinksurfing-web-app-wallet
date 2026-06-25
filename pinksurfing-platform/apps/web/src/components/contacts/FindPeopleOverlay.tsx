@@ -78,12 +78,17 @@ export function FindPeopleOverlay({
   const [tab, setTab] = useState<Tab>('discover');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [coldPromptPerson, setColdPromptPerson] = useState<DiscoverPerson | null>(null);
+  const [outgoingOpen, setOutgoingOpen] = useState(false);
   const [filters, setFilters] = useState<DiscoverFilters>(() =>
     defaultDiscoverFilters(loadFindZip(email))
   );
 
   const incoming = useMemo(() => incomingRequests(email), [email, requests]);
   const outgoing = useMemo(() => outgoingRequests(email), [email, requests]);
+
+  useEffect(() => {
+    if (incoming.length > 0) setTab('requests');
+  }, [email]);
 
   const filtered = useMemo(
     () => filterDiscoverPeople(discoverCatalog(), filters),
@@ -124,13 +129,13 @@ export function FindPeopleOverlay({
   };
 
   const handleApprove = (id: string) => {
-    approveBusinessRequest(email, id);
-    onRefresh();
+    const next = approveBusinessRequest(email, id);
+    onRequestsChange(next);
   };
 
   const handleDecline = (id: string) => {
-    declineBusinessRequest(email, id);
-    onRefresh();
+    const next = declineBusinessRequest(email, id);
+    onRequestsChange(next);
   };
 
   const handleVisit = (person: DiscoverPerson) => {
@@ -244,8 +249,13 @@ export function FindPeopleOverlay({
 
           <div className="ps-scroll flex-1 overflow-y-auto p-3">
             <section className="mb-4">
-              <div className="mb-2 text-[9px] font-semibold uppercase tracking-wide text-[var(--ps-dim)]">
-                Incoming ({incoming.length})
+              <div className="mb-2 flex items-center justify-between">
+                <div className="text-[9px] font-semibold uppercase tracking-wide text-[var(--ps-pink-soft)]">
+                  Incoming requests
+                </div>
+                <span className="rounded-full bg-[var(--ps-pink)]/15 px-2 py-0.5 text-[8px] font-medium text-[var(--ps-pink)]">
+                  {incoming.length} open
+                </span>
               </div>
               {incoming.length === 0 ? (
                 <p className="text-[10px] text-[var(--ps-dim)]">No pending incoming requests.</p>
@@ -265,19 +275,40 @@ export function FindPeopleOverlay({
               )}
             </section>
 
-            <section>
-              <div className="mb-2 text-[9px] font-semibold uppercase tracking-wide text-[var(--ps-dim)]">
-                Pending — you requested ({outgoing.length})
-              </div>
-              {outgoing.length === 0 ? (
-                <p className="text-[10px] text-[var(--ps-dim)]">
-                  Send requests from Discover when you find someone new.
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  {outgoing.map((r) => (
-                    <RequestCard key={r.id} request={r} variant="outgoing" />
-                  ))}
+            <section className="rounded-xl border border-[var(--ps-brd)] bg-[var(--ps-card2)]">
+              <button
+                type="button"
+                onClick={() => setOutgoingOpen((open) => !open)}
+                className="flex w-full items-center justify-between px-3 py-2.5 text-left"
+                aria-expanded={outgoingOpen}
+              >
+                <div>
+                  <div className="text-[9px] font-semibold uppercase tracking-wide text-[var(--ps-dim)]">
+                    Outgoing requests
+                  </div>
+                  <div className="text-[8px] text-[var(--ps-dim)]">
+                    {outgoing.filter((r) => r.status === 'pending').length} pending ·{' '}
+                    {outgoing.filter((r) => r.status === 'approved').length} accepted
+                  </div>
+                </div>
+                <span className="flex items-center gap-1.5 text-[10px] text-[var(--ps-muted)]">
+                  <span className="rounded-full bg-[var(--ps-surf)] px-2 py-0.5 text-[8px]">
+                    {outgoing.length}
+                  </span>
+                  {outgoingOpen ? '▾' : '▸'}
+                </span>
+              </button>
+              {outgoingOpen && (
+                <div className="space-y-2 border-t border-[var(--ps-brd)] p-3">
+                  {outgoing.length === 0 ? (
+                    <p className="text-[10px] text-[var(--ps-dim)]">
+                      Send requests from Discover when you find someone new.
+                    </p>
+                  ) : (
+                    outgoing.map((r) => (
+                      <RequestCard key={r.id} request={r} variant="outgoing" />
+                    ))
+                  )}
                 </div>
               )}
             </section>
@@ -352,6 +383,13 @@ function RequestCard({
           Connect on PayChat before approving a business contact.
         </p>
       </div>
+
+      {variant === 'outgoing' && request.status === 'approved' && (
+        <p className="mt-2 rounded-lg bg-[var(--ps-green,#5DCAA5)]/10 px-2 py-1.5 text-[9px] text-[var(--ps-green,#5DCAA5)]">
+          They accepted your request
+          {request.acceptedAt ? ` · ${formatRequestWhen(request.acceptedAt)}` : ''}
+        </p>
+      )}
 
       {variant === 'incoming' && request.status === 'pending' && onApprove && onDecline && (
         <div className="mt-2 flex gap-2">

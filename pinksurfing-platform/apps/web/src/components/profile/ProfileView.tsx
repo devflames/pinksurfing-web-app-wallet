@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { SessionUser } from '@/lib/types/user';
 import { DEFAULT_PROFILE, profileForUser } from '@/lib/profile-data';
 import { displayName } from '@/lib/auth-storage';
@@ -27,8 +27,13 @@ function FieldRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+function meAvatarFrontKey(email: string): string {
+  return `ps-me-avatar-front-${email}`;
+}
+
 export function ProfileView({ user }: Props) {
   const [mode, setMode] = useState<'personal' | 'business'>('personal');
+  const [frontPhoto, setFrontPhoto] = useState<'personal' | 'business'>('personal');
   const [openCard, setOpenCard] = useState<IdCardKind | null>(null);
   const [cardsOpen, setCardsOpen] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -37,6 +42,21 @@ export function ProfileView({ user }: Props) {
   const name = displayName(user);
   const businessProfile = useMemo(() => businessProfileForUser(user), [user]);
   const email = user?.email ?? 'guest';
+
+  useEffect(() => {
+    const saved = localStorage.getItem(meAvatarFrontKey(email));
+    if (saved === 'personal' || saved === 'business') {
+      setFrontPhoto(saved);
+    }
+  }, [email]);
+
+  const swapFrontPhoto = () => {
+    setFrontPhoto((current) => {
+      const next = current === 'personal' ? 'business' : 'personal';
+      localStorage.setItem(meAvatarFrontKey(email), next);
+      return next;
+    });
+  };
 
   if (settingsOpen) {
     return (
@@ -72,8 +92,8 @@ export function ProfileView({ user }: Props) {
               user={user}
               personalLabel={name}
               businessLabel={profile.businessName}
-              mode={mode}
-              onSwap={() => setMode((m) => (m === 'personal' ? 'business' : 'personal'))}
+              frontPhoto={frontPhoto}
+              onSwap={swapFrontPhoto}
               onOpenSettings={() => setSettingsOpen(true)}
             />
             <div className="mt-1 text-[11px] text-[var(--ps-muted)]">{profile.position}</div>
@@ -100,7 +120,7 @@ export function ProfileView({ user }: Props) {
             onClick={() => setMode((m) => (m === 'personal' ? 'business' : 'personal'))}
             className="rounded-full border border-[var(--ps-brd)] px-3 py-1 text-[10px] text-[var(--ps-cyan)]"
           >
-            {mode === 'personal' ? 'Switch to Business' : 'Switch to Personal'}
+            {mode === 'personal' ? 'Show profile network view' : 'Switch to Personal'}
           </button>
         </div>
         <button

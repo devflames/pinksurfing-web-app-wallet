@@ -14,7 +14,7 @@ type NavItem = {
 
 const ITEMS: NavItem[] = [
   { id: 'home', label: 'Home', icon: '⌂' },
-  { id: 'paychat', label: 'PayChat', icon: '◉' },
+  { id: 'paychat', label: 'PayChat', imageSrc: '/nav/paychat.png' },
   { id: 'shop', label: 'Shop', imageSrc: '/nav/shop.png' },
   { id: 'share', label: 'Share', imageSrc: '/nav/share.png' },
   { id: 'explore', label: 'Explore', imageSrc: '/nav/explore.png' },
@@ -34,7 +34,6 @@ function NavIconContent({
         user={user}
         personalLabel=""
         businessLabel=""
-        mode="personal"
         onSwap={() => {}}
         variant="nav"
       />
