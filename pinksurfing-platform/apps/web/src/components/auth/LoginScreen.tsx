@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { isGoogleAuthEnabled, isLocalAuthMode } from '@/lib/auth-config';
+import { withBasePath } from '@/lib/base-path';
 
 export function LoginScreen() {
   const localMode = isLocalAuthMode();
@@ -57,7 +58,7 @@ export function LoginScreen() {
     <div className="w-full max-w-sm rounded-xl border border-[var(--ps-brd)] bg-[var(--ps-surf)]/90 p-6 shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur-sm">
       <div className="mb-5 text-center">
         <img
-          src="/logo.jpeg"
+          src={withBasePath('/logo.jpeg')}
           alt="PinkSurfing"
           className="mx-auto mb-3 h-16 w-16 rounded-2xl object-cover shadow-[0_8px_32px_rgba(244,114,182,0.25)]"
         />

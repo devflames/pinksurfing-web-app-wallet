@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Poppins } from 'next/font/google';
 import { AuthProvider } from '@/lib/auth-context';
+import { withBasePath } from '@/lib/base-path';
 import './globals.css';
 
 const poppins = Poppins({
@@ -14,9 +15,12 @@ export const metadata: Metadata = {
   title: 'PinkSurfing',
   description: 'Unified messaging, contracts, and wallet platform',
   icons: {
-    icon: [{ url: '/logo.jpeg', type: 'image/jpeg' }],
-    apple: [{ url: '/logo.jpeg', type: 'image/jpeg' }],
-    shortcut: ['/logo.jpeg'],
+    icon: [
+      { url: withBasePath('/favicon.ico') },
+      { url: withBasePath('/logo.jpeg'), type: 'image/jpeg' },
+    ],
+    apple: [{ url: withBasePath('/logo.jpeg'), type: 'image/jpeg' }],
+    shortcut: [withBasePath('/favicon.ico')],
   },
 };
 
