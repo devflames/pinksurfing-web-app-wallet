@@ -245,8 +245,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Same-origin OAuth keeps cookies on app.pinksurfing.com — required for reliable
     // mobile sign-in (cross-subdomain SSO cookies often fail on phone browsers).
+    const onAppSubdomain =
+      typeof window !== 'undefined' &&
+      window.location.hostname === 'app.pinksurfing.com';
     const preferSameOrigin =
-      process.env.NEXT_PUBLIC_GOOGLE_AUTH_SAME_ORIGIN === 'true';
+      process.env.NEXT_PUBLIC_GOOGLE_AUTH_SAME_ORIGIN === 'true' || onAppSubdomain;
 
     if (!preferSameOrigin) {
       const ssoStart =
