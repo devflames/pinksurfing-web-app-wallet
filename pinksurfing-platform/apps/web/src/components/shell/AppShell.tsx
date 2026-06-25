@@ -39,15 +39,15 @@ import {
 import { useAuth } from '@/lib/auth-context';
 import { displayName } from '@/lib/auth-storage';
 import type { BusinessView } from '@/lib/business-view';
-import { getChatSession, STATE_EVENT_LABELS } from '@/lib/chat-session';
+import { getChatSession } from '@/lib/chat-session';
 import {
   createBusinessContract,
   isContractsLive,
   loadContractsByConversation,
   runContractAction,
 } from '@/lib/contracts-service';
+import { resolveBusinessConversation } from '@/lib/business-conversation';
 import {
-  businessConversationForContact,
   DEMO_CONTACTS,
   peerUserIdForContact,
 } from '@/lib/demo-data';
@@ -65,9 +65,9 @@ import { BuildTabTitle } from '@/components/shell/BuildTabTitle';
 import { useIsMobile } from '@/lib/use-is-mobile';
 import { useLiveChat } from '@/lib/use-live-chat';
 import { useContacts } from '@/lib/use-contacts';
-import { chatTypeForContact, fetchPaychatRoomStatus, isChatLive } from '@/lib/chat-api';
+import { fetchPaychatRoomStatus, isChatLive } from '@/lib/chat-api';
 import { usdToMojosEstimate } from '@/lib/wallet-api';
-import { publishStateEvent, syncContractStatesToThread } from '@/lib/state-message-service';
+import { publishStateEvent } from '@/lib/state-message-service';
 import { VAULT_STATE_LABELS } from '@/lib/state-message-types';
 import { CallOverlay } from '@/components/calls/CallOverlay';
 import { CallHeaderAction } from '@/components/calls/CallHeaderAction';
@@ -323,6 +323,7 @@ export function AppShell() {
   const [actingId, setActingId] = useState<string | null>(null);
   const [unlockedPaychat, setUnlockedPaychat] = useState<Record<string, boolean>>({ c7: true });
   const [squareContract, setSquareContract] = useState<BusinessContract | null>(null);
+  const [paychatCheckoutError, setPaychatCheckoutError] = useState<string | null>(null);
   const [paychatCheckout, setPaychatCheckout] = useState<{
     contactId: string;
     name: string;
@@ -501,10 +502,11 @@ export function AppShell() {
     [paychatSettings, user?.email]
   );
 
+  const chatLive = isChatLive();
+
   const active =
     resolveContact(activeId) ??
-    resolveSavedOrDemo(activeId) ??
-    DEMO_CONTACTS[activeId] ??
+    (!chatLive ? resolveSavedOrDemo(activeId) ?? DEMO_CONTACTS[activeId] : undefined) ??
     list[0];
 
   const activePersonalIds = useMemo(
@@ -517,7 +519,8 @@ export function AppShell() {
     [user?.email, businessRequests]
   );
   const peerUserId = active ? resolvePeerUserId(active) : null;
-  const bizConv = active?.type === 'business' ? businessConversationForContact(active.id) : null;
+  const bizConv =
+    active?.type === 'business' ? resolveBusinessConversation(active, userId) : null;
   const primaryContract = contracts[0] ?? null;
 
   const businessAvatarRings = useMemo(() => {
@@ -541,7 +544,6 @@ export function AppShell() {
       ? (paychatServerAsk[active.id] ?? active.askUsd ?? 0)
       : 0;
 
-  const chatLive = isChatLive();
   const {
     messages,
     send,
@@ -554,7 +556,7 @@ export function AppShell() {
   } = useLiveChat({
     token,
     userId,
-    contact: active ?? DEMO_CONTACTS.c1,
+    contact: active ?? list[0] ?? DEMO_CONTACTS.c1,
     peerUserId,
     fallbackPreview: active?.preview ?? '',
   });
@@ -625,51 +627,6 @@ export function AppShell() {
     }
     loadContracts();
   }, [isChatSection, effectiveTab, active?.type, bizConv, loadContracts]);
-
-  useEffect(() => {
-    if (!chatLive || !token || !userId || !peerUserId || !active || active.type !== 'business') {
-      return;
-    }
-    if (contractsLoading || contracts.length === 0) return;
-
-    let cancelled = false;
-    void syncContractStatesToThread({
-      token,
-      fromUserId: userId,
-      toUserId: peerUserId,
-      contactId: active.id,
-      chatType: chatTypeForContact(active),
-      contracts,
-    }).then((published) => {
-      if (!cancelled && published > 0) void reloadChat();
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    chatLive,
-    token,
-    userId,
-    peerUserId,
-    active,
-    contracts,
-    contractsLoading,
-    reloadChat,
-  ]);
-
-  const emitContractState = useCallback(
-    (c: BusinessContract) => {
-      const ev = STATE_EVENT_LABELS[c.state];
-      if (!ev || active?.type !== 'business') return;
-      void appendState(ev.label, ev.accent, c.title, {
-        eventType: 'CONTRACT_STATE',
-        refId: contractId(c),
-        state: c.state,
-      });
-    },
-    [active?.type, appendState]
-  );
 
   const openQrModal = (kind: 'business' | 'paychat') => {
     setQrModalKind(kind);
@@ -821,7 +778,7 @@ export function AppShell() {
       const isGroup = !!(target.isGroup && target.groupId);
       const peer = isGroup
         ? target.groupId!
-        : resolvePeerUserId(target) ?? peerUserIdForContact(target.id);
+        : resolvePeerUserId(target) ?? (!chatLive ? peerUserIdForContact(target.id) : null);
 
       if (!peer) {
         setCallError(isGroup ? 'Group id missing for this chat.' : 'No peer user id configured for this contact.');
@@ -969,9 +926,8 @@ export function AppShell() {
       counterpartyUserId: bizConv.counterpartyUserId,
       ...data,
     });
-    const updated = await loadContracts();
-    const match = updated.find((c) => c.title === data.title) ?? updated[0];
-    if (match) emitContractState(match);
+    await loadContracts();
+    if (chatLive) void reloadChat();
   };
 
   const runAction = async (c: BusinessContract, action: ContractActionType) => {
@@ -981,8 +937,7 @@ export function AppShell() {
       await runContractAction(token, contractId(c), action, userId);
       const updated = await loadContractsByConversation(token, bizConv.conversationId);
       setContracts(updated);
-      const match = updated.find((x) => contractId(x) === contractId(c));
-      if (match) emitContractState(match);
+      if (chatLive) void reloadChat();
     } catch (e) {
       setContractsError(e instanceof Error ? e.message : 'Action failed');
     } finally {
@@ -1006,9 +961,8 @@ export function AppShell() {
     try {
       await runContractAction(token, contractId(c), 'INITIATE_ESCROW_FUNDING', userId);
       await runContractAction(token, contractId(c), 'MARK_ESCROW_FUNDED', userId);
-      const updated = await loadContracts();
-      const match = updated.find((x) => contractId(x) === contractId(c));
-      if (match) emitContractState(match);
+      await loadContracts();
+      if (chatLive) void reloadChat();
     } catch (e) {
       setContractsError(e instanceof Error ? e.message : 'Payment failed');
     } finally {
@@ -1033,10 +987,11 @@ export function AppShell() {
   const handlePaychatPaymentSuccess = (method: 'square' | 'vault' = 'square') => {
     if (!paychatCheckout) return;
     const { contactId, toUserId } = paychatCheckout;
-    const labels =
-      method === 'vault' ? VAULT_STATE_LABELS.PAYCHAT_VAULT : VAULT_STATE_LABELS.PAYCHAT_SQUARE;
 
-    if (chatLive && token && userId && toUserId) {
+    // Vault unlock + state message are posted server-side (paychat/vault-unlock).
+    // Square still publishes client-side until webhook posts state events.
+    if (method === 'square' && chatLive && token && userId && toUserId) {
+      const labels = VAULT_STATE_LABELS.PAYCHAT_SQUARE;
       void publishStateEvent({
         token,
         fromUserId: userId,
@@ -1046,30 +1001,36 @@ export function AppShell() {
         label: labels.label,
         accent: labels.accent,
         contractTitle: 'PayChat unlock',
-        eventType: 'VAULT_PAYCHAT',
+        eventType: 'PAYMENT_SQUARE',
         refId: contactId,
       }).then(() => {
         if (active?.id === contactId) void reloadChat();
       });
-    } else {
+    } else if (!chatLive) {
+      const labels =
+        method === 'vault' ? VAULT_STATE_LABELS.PAYCHAT_VAULT : VAULT_STATE_LABELS.PAYCHAT_SQUARE;
       getChatSession().appendStateEvent(
         contactId,
         labels.label,
         labels.accent,
         'PayChat unlock'
       );
+    } else if (method === 'vault' && active?.id === contactId) {
+      void reloadChat();
     }
 
     setPaychatCheckout(null);
     setUnlockedPaychat((u) => ({ ...u, [contactId]: true }));
     joinContactViaQr('paychat', contactId);
     refreshJoined();
-    getChatSession().appendSystemText(
-      contactId,
-      method === 'vault'
-        ? 'Vault payment sent on-chain. PayChat unlocked.'
-        : 'Payment confirmed via Square. PayChat unlocked.'
-    );
+    if (!chatLive) {
+      getChatSession().appendSystemText(
+        contactId,
+        method === 'vault'
+          ? 'Vault payment sent on-chain. PayChat unlocked.'
+          : 'Payment confirmed via Square. PayChat unlocked.'
+      );
+    }
     setActiveForSection(contactId);
     setMobileChatFocused(true);
   };
@@ -1476,7 +1437,14 @@ export function AppShell() {
               name={active.name}
               askUsd={activePaychatAskUsd}
               onUnlock={() => {
+                setPaychatCheckoutError(null);
                 const peerId = resolvePeerUserId(active);
+                if (chatLive && !peerId) {
+                  setPaychatCheckoutError(
+                    'Scan their PayChat QR first so we can connect to their account.'
+                  );
+                  return;
+                }
                 void resolveRecipientChiaAddress(active).then((recipientChiaAddress) => {
                   setPaychatCheckout({
                     contactId: active.id,
@@ -1598,6 +1566,12 @@ export function AppShell() {
             />
           )}
 
+          {paychatCheckoutError && (
+            <div className="border-b border-[var(--ps-pink)]/30 bg-[var(--ps-pink)]/10 px-3 py-2 text-[10px] text-[var(--ps-pink)]">
+              {paychatCheckoutError}
+            </div>
+          )}
+
           {paychatCheckout &&
             (chatLive && token && userId && paychatCheckout.toUserId ? (
               <PayChatCheckoutModal
@@ -1613,7 +1587,7 @@ export function AppShell() {
                 onClose={() => setPaychatCheckout(null)}
                 onSuccess={handlePaychatPaymentSuccess}
               />
-            ) : (
+            ) : chatLive ? null : (
               <SquareCheckoutModal
                 mode="paychat"
                 open

@@ -87,6 +87,13 @@ async function joinPaychatLive(
     paychatContacts[paychatContacts.length - 1];
 
   if (match) {
+    upsertDynamicPaychatContact({
+      id: match.id,
+      name: match.name,
+      code: pspayId,
+      askUsd: match.askUsd,
+      userId: match.userId,
+    });
     return { contactId: match.id, label: match.name };
   }
 
@@ -97,6 +104,7 @@ async function joinPaychatLive(
       name: registry.name,
       code: registry.code,
       askUsd: registry.askUsd,
+      userId: registry.userId,
     });
     return { contactId, label: registry.name };
   }
@@ -135,6 +143,13 @@ async function joinBusinessLive(
   );
 
   if (match) {
+    upsertDynamicBusinessContact({
+      id: match.id,
+      name: match.name,
+      code: registry.code,
+      email: registry.email,
+      userId: match.userId ?? registry.userId,
+    });
     return { contactId: match.id, label: match.name };
   }
 
@@ -144,6 +159,7 @@ async function joinBusinessLive(
     name: registry.name,
     code: registry.code,
     email: registry.email,
+    userId: registry.userId,
   });
   return { contactId, label: registry.name };
 }

@@ -5,6 +5,7 @@ export type DynamicBusinessContact = {
   name: string;
   code: string;
   email?: string;
+  userId?: string;
 };
 
 const KEY = 'ps-dynamic-business-contacts';
@@ -32,6 +33,7 @@ export function upsertDynamicBusinessContact(entry: DynamicBusinessContact): voi
 export function dynamicBusinessContactToUi(entry: DynamicBusinessContact): Contact {
   return {
     id: entry.id,
+    userId: entry.userId,
     name: entry.name,
     initials: entry.name
       .split(/\s+/)

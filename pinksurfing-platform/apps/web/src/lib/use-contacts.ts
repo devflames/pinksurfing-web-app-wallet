@@ -89,9 +89,12 @@ export function useContacts(token: string | null) {
 
   const resolveContact = useCallback(
     (id: string): Contact | undefined => {
-      return allContacts.find((c) => c.id === id) ?? DEMO_CONTACTS[id];
+      const found = allContacts.find((c) => c.id === id);
+      if (found) return found;
+      if (live) return undefined;
+      return DEMO_CONTACTS[id];
     },
-    [allContacts]
+    [allContacts, live]
   );
 
   const resolvePeerUserId = useCallback((contact: Contact): string | null => {

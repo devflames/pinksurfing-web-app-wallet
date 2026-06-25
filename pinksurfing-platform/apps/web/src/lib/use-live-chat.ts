@@ -76,12 +76,12 @@ export function useLiveChat({
   }, [reload]);
 
   const messages = useMemo(() => {
-    if (!live) return local.messages;
-    return apiMessages;
-  }, [live, apiMessages, local.messages]);
+    if (isChatLive()) return apiMessages;
+    return local.messages;
+  }, [apiMessages, local.messages]);
 
   const preview = useMemo(() => {
-    if (!live) return local.preview;
+    if (!isChatLive()) return local.preview;
     const last = [...apiMessages]
       .reverse()
       .find((m) => m.kind === 'text' || m.kind === 'attachment' || m.kind === 'state');
@@ -97,7 +97,7 @@ export function useLiveChat({
       };
     }
     return { preview: last.text, time: last.time };
-  }, [live, apiMessages, local.preview]);
+  }, [apiMessages, local.preview]);
 
   const appendState = useCallback(
     async (
@@ -128,6 +128,7 @@ export function useLiveChat({
           setError(e instanceof Error ? e.message : 'Failed to publish state event');
         }
       }
+      if (isChatLive()) return;
       local.appendState(label, accent, contractTitle);
     },
     [live, token, userId, peerUserId, contact, local, reload]
@@ -138,6 +139,10 @@ export function useLiveChat({
       const trimmed = text.trim();
       if (!trimmed) return;
       if (!live || !token || !userId || !peerUserId) {
+        if (isChatLive()) {
+          setError('Live chat unavailable for this contact. Add them via QR.');
+          return;
+        }
         local.send(trimmed);
         return;
       }
@@ -158,6 +163,10 @@ export function useLiveChat({
     async (file: File, caption?: string) => {
       const isAudio = file.type.startsWith('audio/');
       if (!live || !token || !userId || !peerUserId) {
+        if (isChatLive()) {
+          setError('Live chat unavailable for this contact. Add them via QR.');
+          return;
+        }
         if (isAudio || file.type.startsWith('image/')) {
           const url = URL.createObjectURL(file);
           getChatSession().sendAttachment(contact.id, url, file.name, caption);

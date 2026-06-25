@@ -5,6 +5,7 @@ export type DynamicPaychatContact = {
   name: string;
   code: string;
   askUsd?: number;
+  userId?: string;
 };
 
 const KEY = 'ps-dynamic-paychat-contacts';
@@ -32,6 +33,7 @@ export function upsertDynamicPaychatContact(entry: DynamicPaychatContact): void 
 export function dynamicContactToUi(entry: DynamicPaychatContact): Contact {
   return {
     id: entry.id,
+    userId: entry.userId,
     name: entry.name,
     initials: entry.name
       .split(/\s+/)
