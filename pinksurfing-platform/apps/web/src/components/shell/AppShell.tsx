@@ -1107,18 +1107,34 @@ export function AppShell() {
 
   const chatFallback =
     isChatSection && !active ? (
-      <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center text-[11px] text-[var(--ps-muted)]">
+      <div className="flex flex-1 flex-col items-center justify-center gap-4 p-6 text-center text-[11px] text-[var(--ps-muted)]">
         {contactsLoading ? (
           <>Loading chats…</>
-        ) : liveContactsEmpty || list.length === 0 ? (
-          <>
-            <span className="text-[var(--ps-white)]">No chats yet</span>
-            <span>
-              Scan a business or PayChat QR (Share / Explore) to add your first contact.
-            </span>
-          </>
         ) : (
-          <>Loading chats…</>
+          <>
+            <span className="text-sm font-medium text-[var(--ps-white)]">No chats yet</span>
+            <span>Scan someone&apos;s QR code to add your first contact.</span>
+            <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+              {section === 'home' && (
+                <button
+                  type="button"
+                  onClick={() => openQrModal('business')}
+                  className="rounded-lg border border-[var(--ps-pink)]/50 bg-[var(--ps-card)] px-4 py-2 text-[11px] font-medium text-[var(--ps-pink)] hover:border-[var(--ps-pink)]"
+                >
+                  Scan business QR
+                </button>
+              )}
+              {(section === 'home' || section === 'paychat') && (
+                <button
+                  type="button"
+                  onClick={() => openQrModal('paychat')}
+                  className="rounded-lg border border-[var(--ps-cyan)]/50 bg-[var(--ps-card)] px-4 py-2 text-[11px] font-medium text-[var(--ps-cyan)] hover:border-[var(--ps-cyan)]"
+                >
+                  Scan PayChat QR
+                </button>
+              )}
+            </div>
+          </>
         )}
       </div>
     ) : null;
@@ -1673,14 +1689,6 @@ export function AppShell() {
             />
           )}
 
-          <QrJoinModal
-            kind={qrModalKind}
-            open={showQrModal && isChatSection}
-            token={token}
-            onClose={() => setShowQrModal(false)}
-            onJoin={handleQrJoin}
-          />
-
           {(agora.activeCall || agora.pendingCall) && (
             <CallOverlay
               call={
@@ -1744,6 +1752,16 @@ export function AppShell() {
           <ProfileView user={user} />
         </SectionPanel>
       ) : null}
+
+      {isChatSection && (
+        <QrJoinModal
+          kind={qrModalKind}
+          open={showQrModal}
+          token={token}
+          onClose={() => setShowQrModal(false)}
+          onJoin={handleQrJoin}
+        />
+      )}
 
       <BottomNav section={section} onChange={handleNavigate} user={user} />
 
