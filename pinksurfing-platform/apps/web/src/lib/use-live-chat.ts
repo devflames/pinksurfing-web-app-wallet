@@ -13,6 +13,7 @@ import { useChatSession } from './use-chat-session';
 import { getChatSession } from './chat-session';
 import { publishStateEvent } from './state-message-service';
 import type { StateEventType } from './state-message-types';
+import { isDemoPeerUserId, isLiveChatPeerUserId } from './live-chat-peer';
 import type { ThreadMessage } from './types/chat';
 
 export type AppendStateMeta = {
@@ -36,7 +37,8 @@ export function useLiveChat({
   peerUserId,
   fallbackPreview,
 }: Options) {
-  const live = isChatLive() && !!token && !!userId && !!peerUserId;
+  const peerOk = isLiveChatPeerUserId(peerUserId);
+  const live = isChatLive() && !!token && !!userId && !!peerUserId && peerOk;
   const local = useChatSession(contact.id, fallbackPreview);
 
   const [apiMessages, setApiMessages] = useState<ThreadMessage[]>([]);
@@ -45,7 +47,17 @@ export function useLiveChat({
   const [uploading, setUploading] = useState(false);
 
   const reload = useCallback(async () => {
-    if (!live || !token || !userId || !peerUserId) return;
+    if (!isChatLive() || !token || !userId || !peerUserId) return;
+    if (isDemoPeerUserId(peerUserId)) {
+      setError(null);
+      setApiMessages([]);
+      return;
+    }
+    if (!peerOk) {
+      setError('Add a real contact via QR or business card to use live chat.');
+      setApiMessages([]);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -57,7 +69,7 @@ export function useLiveChat({
     } finally {
       setLoading(false);
     }
-  }, [live, token, userId, peerUserId, contact]);
+  }, [token, userId, peerUserId, peerOk, contact]);
 
   useEffect(() => {
     reload();

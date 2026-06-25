@@ -4,6 +4,11 @@ import { useEffect, useState } from 'react';
 import { QrDisplay } from '@/components/profile/QrDisplay';
 import { useWalletIdentity } from '@/hooks/use-wallet-identity';
 import { copyText, shareText } from '@/lib/wallet-identity-storage';
+import {
+  detectMisplacedBtcAddress,
+  validateBtcPubkey,
+  validateChiaWalletAddress,
+} from '@/lib/wallet-address-validation';
 
 type Props = {
   /** compact = sidebar; full = Profile / Explore */
@@ -96,8 +101,14 @@ export function WalletIdentityCard({
   };
 
   const save = () => {
-    if (!draftChia.trim()) {
-      flash('Enter your Chia wallet address');
+    const chiaCheck = validateChiaWalletAddress(draftChia);
+    if (!chiaCheck.ok) {
+      flash(chiaCheck.message);
+      return;
+    }
+    const btcCheck = validateBtcPubkey(draftBtc);
+    if (!btcCheck.ok) {
+      flash(btcCheck.message);
       return;
     }
     persist({ chiaAddress: draftChia.trim(), btcPubkey: draftBtc.trim() || undefined });
@@ -202,11 +213,13 @@ export function WalletIdentityCard({
       {showEdit && editing ? (
         <div className="space-y-2">
           <div>
-            <label className="mb-1 block text-[9px] text-[var(--ps-muted)]">Wallet address</label>
+            <label className="mb-1 block text-[9px] text-[var(--ps-muted)]">
+              Chia wallet address (xch1…)
+            </label>
             <input
               value={draftChia}
               onChange={(e) => setDraftChia(e.target.value)}
-              placeholder="Your receive address"
+              placeholder="xch1… or txch1… (XCH only — not bc1 BTC)"
               className="w-full rounded-lg border border-[var(--ps-brd)] bg-[var(--ps-surf)] px-2 py-2 text-[10px] text-[var(--ps-white)] outline-none focus:border-[var(--ps-cyan)]/40"
             />
           </div>
@@ -244,13 +257,20 @@ export function WalletIdentityCard({
         <div className="space-y-3">
           <div className="rounded-xl border border-[var(--ps-brd)] bg-[var(--ps-surf)] p-3">
             <h4 className={`font-medium text-[var(--ps-white)] ${isFull ? 'text-[11px]' : 'text-[10px]'}`}>
-              Wallet address
+              Chia wallet address
             </h4>
             <p className="mt-0.5 text-[9px] leading-snug text-[var(--ps-dim)]">
-              (receive address for PS Pay)
+              Receives XCH for PayChat, KeyVault deposit, and vault withdraw — not Bitcoin.
             </p>
 
             {chiaAddress ? (
+              <>
+                {detectMisplacedBtcAddress(chiaAddress) && (
+                  <p className="mt-2 rounded-lg border border-[var(--ps-amber,#fbbf24)]/40 bg-[var(--ps-amber,#fbbf24)]/10 p-2 text-[9px] text-[var(--ps-amber,#fbbf24)]">
+                    This looks like a Bitcoin address. Edit and enter a Chia address (xch1…) for vault
+                    and PayChat. Use the Bitcoin public key field below for BTC atomic swaps.
+                  </p>
+                )}
               <div className={`mt-3 ${isFull ? 'flex flex-col items-center gap-3 sm:flex-row sm:items-start' : ''}`}>
                 {isFull && <QrDisplay value={chiaAddress} size={88} />}
                 <div className="min-w-0 flex-1">
@@ -260,6 +280,7 @@ export function WalletIdentityCard({
                   <CopyShareActions label="Wallet address" value={chiaAddress} onFlash={flash} compact={!isFull} />
                 </div>
               </div>
+              </>
             ) : (
               <p className="mt-2 text-[10px] text-[var(--ps-dim)]">
                 Add your wallet address to receive payments and use your secure vault.

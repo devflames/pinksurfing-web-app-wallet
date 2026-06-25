@@ -39,7 +39,14 @@ export function useContacts(token: string | null) {
     reload();
   }, [reload]);
 
-  const allContacts = live && apiContacts.length > 0 ? apiContacts : Object.values(DEMO_CONTACTS);
+  const allContacts =
+    live && apiContacts.length > 0
+      ? apiContacts
+      : live
+        ? []
+        : Object.values(DEMO_CONTACTS);
+
+  const liveContactsEmpty = live && !loading && apiContacts.length === 0 && !error;
 
   const [joinTick, setJoinTick] = useState(0);
 
@@ -89,13 +96,15 @@ export function useContacts(token: string | null) {
 
   const resolvePeerUserId = useCallback((contact: Contact): string | null => {
     if (contact.userId) return contact.userId;
+    if (live) return null;
     return peerUserIdForContact(contact.id);
-  }, []);
+  }, [live]);
 
   return {
     live,
     loading,
     error,
+    liveContactsEmpty,
     reload,
     refreshJoined,
     getContactsForTab,

@@ -58,7 +58,7 @@ export function ChatInput({
   const recording = recorder.state === 'recording';
 
   return (
-    <div className="flex shrink-0 flex-col border-t border-[var(--ps-brd)] bg-[var(--ps-surf)]">
+    <div className="flex shrink-0 flex-col ps-neu-input-bar">
       {recording && (
         <div className="flex items-center justify-between gap-2 border-b border-[var(--ps-pink)]/30 bg-[var(--ps-pink)]/10 px-3 py-1.5">
           <span className="flex items-center gap-2 text-[10px] text-[var(--ps-pink)]">
@@ -79,7 +79,7 @@ export function ChatInput({
           {recorder.error}
         </p>
       )}
-      <div className="flex items-end gap-2 p-2">
+      <div className="flex items-end gap-1.5 p-2">
         <input
           ref={fileRef}
           type="file"
@@ -91,7 +91,7 @@ export function ChatInput({
           type="button"
           disabled={disabled || uploading || recording || !onAttach}
           onClick={() => fileRef.current?.click()}
-          className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full border border-[var(--ps-brd)] text-[11px] text-[var(--ps-muted)] disabled:opacity-40"
+          className="ps-neu-icon-btn flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] text-[var(--ps-muted)] disabled:opacity-40"
           title="Attach file"
         >
           {uploading ? '…' : '📎'}
@@ -108,17 +108,15 @@ export function ChatInput({
           }}
           placeholder={recording ? 'Tap mic to send voice message…' : placeholder}
           disabled={disabled || uploading || recording}
-          className="max-h-20 flex-1 resize-none rounded-full border border-[var(--ps-brd)] bg-[var(--ps-card)] px-3 py-1.5 text-[11px] text-[var(--ps-white)] outline-none placeholder:text-[var(--ps-dim)] focus:border-[var(--ps-brd2)] disabled:opacity-50"
+          className="ps-neu-input-field max-h-20 min-h-[34px] flex-1 resize-none px-3 py-1.5 text-[11px] text-[var(--ps-white)] outline-none placeholder:text-[var(--ps-dim)] disabled:opacity-50"
         />
         {showMic && (
           <button
             type="button"
             disabled={disabled || uploading || !onAttach || recorder.state === 'unsupported'}
             onClick={() => void toggleRecording()}
-            className={`flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full border text-[11px] transition-colors disabled:opacity-40 ${
-              recording
-                ? 'border-[var(--ps-pink)] bg-[var(--ps-pink)]/20 text-[var(--ps-pink)]'
-                : 'border-[var(--ps-brd)] text-[var(--ps-muted)] hover:border-[var(--ps-cyan)]/40 hover:text-[var(--ps-cyan)]'
+            className={`ps-neu-icon-btn flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[12px] transition-colors disabled:opacity-40 ${
+              recording ? 'text-[var(--ps-pink)] ring-1 ring-[var(--ps-pink)]/40' : 'text-[var(--ps-pink)]'
             }`}
             title={
               recording
@@ -135,7 +133,7 @@ export function ChatInput({
           type="button"
           onClick={submit}
           disabled={disabled || uploading || recording}
-          className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full bg-[var(--ps-pink)] text-sm text-[var(--ps-card)] disabled:opacity-40"
+          className="ps-neu-send-btn flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm disabled:opacity-40"
           title="Send"
         >
           →

@@ -61,6 +61,8 @@ import {
 } from '@/lib/call-history-storage';
 import type { BusinessContract, ContractActionType } from '@/lib/types/contract';
 import { contractId } from '@/lib/types/contract';
+import { BuildTabTitle } from '@/components/shell/BuildTabTitle';
+import { useIsMobile } from '@/lib/use-is-mobile';
 import { useLiveChat } from '@/lib/use-live-chat';
 import { useContacts } from '@/lib/use-contacts';
 import { chatTypeForContact, fetchPaychatRoomStatus, isChatLive } from '@/lib/chat-api';
@@ -291,6 +293,7 @@ function ContactRow({
 }
 
 export function AppShell() {
+  const isMobile = useIsMobile();
   const { token, user, userId, loading: authLoading, error: authError, logout } = useAuth();
   const [section, setSection] = useState<AppSection>('home');
   const [homeTab, setHomeTab] = useState<ChatTab>('business');
@@ -299,6 +302,8 @@ export function AppShell() {
   const {
     loading: contactsLoading,
     error: contactsError,
+    liveContactsEmpty,
+    reload: reloadContacts,
     getContactsForTab,
     resolveContact,
     resolvePeerUserId,
@@ -1082,7 +1087,8 @@ export function AppShell() {
     effectiveTab === 'business' &&
     active?.type === 'business' &&
     !!contractsError;
-  const showContactsWarning = isChatSection && !!contactsError;
+  const showContactsWarning =
+    isChatSection && (!!contactsError || liveContactsEmpty);
   const showChatWarning = isChatSection && !!chatError;
   const showStatusBar =
     authLoading || authError || showBusinessContractsError || showContactsWarning || showChatWarning;
@@ -1097,7 +1103,12 @@ export function AppShell() {
   return (
     <ShellNavProvider section={section} shopMode={shopMode} onNavigate={handleNavigate}>
     <ShellChrome>
-    <div className="relative flex h-[100dvh] w-full flex-col overflow-hidden border-0 bg-[var(--ps-bg)]/95 md:h-[min(780px,calc(100vh-1.5rem))] md:rounded-2xl md:border md:border-[var(--ps-brd)] md:shadow-[0_24px_80px_rgba(0,0,0,0.55)] md:backdrop-blur-sm">
+    <BuildTabTitle sectionLabel={SECTION_TITLES[section]} />
+    <div
+      className={`ps-shell-frame relative flex w-full flex-col overflow-hidden border-0 bg-[var(--ps-bg)]/95 md:h-[min(780px,calc(100vh-1.5rem))] md:rounded-2xl md:border md:border-[var(--ps-brd)] md:shadow-[0_24px_80px_rgba(0,0,0,0.55)] md:backdrop-blur-sm ${
+        isMobile ? 'h-[100dvh] max-h-[100dvh] rounded-none shadow-none' : 'h-[100dvh]'
+      }`}
+    >
       {showStatusBar && (
         <div className="shrink-0 border-b border-[var(--ps-brd)] bg-[var(--ps-card2)] px-3 py-1.5 text-[10px]">
           {authLoading && <span className="text-[var(--ps-muted)]">Connecting…</span>}
@@ -1108,7 +1119,10 @@ export function AppShell() {
             </span>
           )}
           {showContactsWarning && !authError && (
-            <span className="text-[var(--ps-amber)]">Contacts: {contactsError}</span>
+            <span className="text-[var(--ps-amber)]">
+              {contactsError ??
+                'No live contacts yet — scan a business or PayChat QR to add real contacts.'}
+            </span>
           )}
           {showChatWarning && !authError && (
             <span className="text-[var(--ps-amber)]">Chat: {chatError}</span>
@@ -1116,7 +1130,7 @@ export function AppShell() {
         </div>
       )}
 
-      <header className="flex shrink-0 items-center justify-between border-b border-[var(--ps-brd2)]/40 bg-[var(--ps-surf)] px-3 py-2.5 md:px-4 md:py-3">
+      <header className="ps-shell-top-header flex shrink-0 items-center justify-between border-b border-[var(--ps-brd2)]/40 bg-[var(--ps-surf)] px-3 py-2.5 md:px-4 md:py-3">
         <div className="text-lg font-semibold tracking-tight text-[var(--ps-white)] md:text-[22px]">
           {SECTION_TITLES[section]}
         </div>
@@ -1474,7 +1488,10 @@ export function AppShell() {
             />
           ) : (
             <>
-              <MessageThread messages={messages}>
+              <MessageThread
+                messages={messages}
+                variant={active.type === 'business' && !active.isGroup ? 'neu' : 'classic'}
+              >
                 {chatLoading && chatLive && (
                   <p className="text-center text-[10px] text-[var(--ps-dim)]">Loading messages…</p>
                 )}

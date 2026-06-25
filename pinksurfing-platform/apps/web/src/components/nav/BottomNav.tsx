@@ -63,7 +63,7 @@ type Props = {
 
 export function BottomNav({ section, onChange, user = null }: Props) {
   return (
-    <nav className="flex shrink-0 border-t border-[var(--ps-brd)] bg-[var(--ps-surf)]/95 backdrop-blur-sm">
+    <nav className="ps-bottom-nav flex shrink-0 border-t border-[var(--ps-brd)] bg-[var(--ps-surf)]/95 backdrop-blur-sm">
       {ITEMS.map((item) => {
         const active = section === item.id;
         return (
