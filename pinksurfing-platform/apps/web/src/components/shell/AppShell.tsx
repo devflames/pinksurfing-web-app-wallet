@@ -1105,24 +1105,56 @@ export function AppShell() {
   const showStatusBar =
     authLoading || authError || showBusinessContractsError || showContactsWarning || showChatWarning;
 
+  const emptyHomeFindOpen =
+    section === 'home' && !active && homeMainOverlay === 'find';
+
+  const findPeopleOverlay = (
+    <FindPeopleOverlay
+      user={user}
+      token={token}
+      userId={userId}
+      displayName={displayName(user)}
+      requests={businessRequests}
+      onClose={() => setHomeMainOverlay(null)}
+      onRefresh={refreshBusinessRequests}
+      onRequestsChange={setBusinessRequests}
+      onOpenPaychat={() => {
+        setHomeMainOverlay(null);
+        handleNavigate('paychat');
+      }}
+      onVisitProfile={(contactId: string) => {
+        openBusinessProfile(contactId);
+      }}
+    />
+  );
+
   const chatFallback =
-    isChatSection && !active ? (
+    isChatSection && !active && !emptyHomeFindOpen ? (
       <div className="flex flex-1 flex-col items-center justify-center gap-4 p-6 text-center text-[11px] text-[var(--ps-muted)]">
         {contactsLoading ? (
           <>Loading chats…</>
         ) : (
           <>
             <span className="text-sm font-medium text-[var(--ps-white)]">No chats yet</span>
-            <span>Scan someone&apos;s QR code to add your first contact.</span>
+            <span>Scan a QR code or find people to add your first contact.</span>
             <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
               {section === 'home' && (
-                <button
-                  type="button"
-                  onClick={() => openQrModal('business')}
-                  className="rounded-lg border border-[var(--ps-pink)]/50 bg-[var(--ps-card)] px-4 py-2 text-[11px] font-medium text-[var(--ps-pink)] hover:border-[var(--ps-pink)]"
-                >
-                  Scan business QR
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={() => openHomeOverlay('find')}
+                    className="rounded-lg border border-[var(--ps-white)]/20 bg-[var(--ps-card)] px-4 py-2 text-[11px] font-medium text-[var(--ps-white)] hover:border-[var(--ps-white)]/40"
+                  >
+                    Find people
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openQrModal('business')}
+                    className="rounded-lg border border-[var(--ps-pink)]/50 bg-[var(--ps-card)] px-4 py-2 text-[11px] font-medium text-[var(--ps-pink)] hover:border-[var(--ps-pink)]"
+                  >
+                    Scan business QR
+                  </button>
+                </>
               )}
               {(section === 'home' || section === 'paychat') && (
                 <button
@@ -1360,25 +1392,7 @@ export function AppShell() {
         >
           {homePanelActive ? (
             <>
-              {homeMainOverlay === 'find' && (
-                <FindPeopleOverlay
-                  user={user}
-                  token={token}
-                  userId={userId}
-                  displayName={displayName(user)}
-                  requests={businessRequests}
-                  onClose={() => setHomeMainOverlay(null)}
-                  onRefresh={refreshBusinessRequests}
-                  onRequestsChange={setBusinessRequests}
-                  onOpenPaychat={() => {
-                    setHomeMainOverlay(null);
-                    handleNavigate('paychat');
-                  }}
-                  onVisitProfile={(contactId: string) => {
-                    openBusinessProfile(contactId);
-                  }}
-                />
-              )}
+              {homeMainOverlay === 'find' && findPeopleOverlay}
               {homeMainOverlay === 'calls' && (
                 <CallsContactsOverlay
                   contacts={connectedContacts}
@@ -1735,6 +1749,8 @@ export function AppShell() {
         </aside>
         )}
       </div>
+      ) : emptyHomeFindOpen ? (
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{findPeopleOverlay}</div>
       ) : chatFallback ? (
         chatFallback
       ) : section === 'shop' ? (
