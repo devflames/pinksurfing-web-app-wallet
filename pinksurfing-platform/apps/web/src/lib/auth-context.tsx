@@ -241,33 +241,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 
   const loginWithGoogle = useCallback(() => {
-
     setError(null);
 
-    const ssoStart =
+    // Same-origin OAuth keeps cookies on app.pinksurfing.com — required for reliable
+    // mobile sign-in (cross-subdomain SSO cookies often fail on phone browsers).
+    const preferSameOrigin =
+      process.env.NEXT_PUBLIC_GOOGLE_AUTH_SAME_ORIGIN === 'true';
 
-      process.env.NEXT_PUBLIC_SSO_GOOGLE_START_URL ||
+    if (!preferSameOrigin) {
+      const ssoStart =
+        process.env.NEXT_PUBLIC_SSO_GOOGLE_START_URL ||
+        (typeof window !== 'undefined' &&
+        process.env.NEXT_PUBLIC_AUTH_MODE === 'production'
+          ? 'https://auth.pinksurfing.com/api/auth/google/'
+          : '');
 
-      (typeof window !== 'undefined' &&
-
-      process.env.NEXT_PUBLIC_AUTH_MODE === 'production'
-
-        ? 'https://auth.pinksurfing.com/api/auth/google/'
-
-        : '');
-
-    if (ssoStart) {
-
-      const next = `${window.location.origin}${withBasePath('/auth/google/complete')}`;
-
-      window.location.href = `${ssoStart}?next=${encodeURIComponent(next)}`;
-
-      return;
-
+      if (ssoStart) {
+        const next = `${window.location.origin}${withBasePath('/auth/google/complete')}`;
+        window.location.href = `${ssoStart}?next=${encodeURIComponent(next)}`;
+        return;
+      }
     }
 
     window.location.href = withBasePath('/api/auth/google');
-
   }, []);
 
 

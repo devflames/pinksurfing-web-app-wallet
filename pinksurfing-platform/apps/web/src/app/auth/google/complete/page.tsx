@@ -36,7 +36,10 @@ export default function GoogleAuthCompletePage() {
         };
 
         if (!res.ok || !data.token || !data.user) {
-          throw new Error(data.message || 'Could not complete Google sign-in');
+          const hint = useSsoCookies
+            ? ' Session cookies from auth.pinksurfing.com may be blocked on mobile — ask admin to enable NEXT_PUBLIC_GOOGLE_AUTH_SAME_ORIGIN=true.'
+            : '';
+          throw new Error((data.message || 'Could not complete Google sign-in') + hint);
         }
 
         if (cancelled) return;

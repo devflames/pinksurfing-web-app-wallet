@@ -47,12 +47,14 @@ router.get('/google/callback', async (req, res) => {
     console.log(`[API] GET /auth/google/callback — sessionId=${sessionId}`);
     const result = await googleOAuth.handleCallback(code, sessionId);
 
-    // Show success page that auto-closes (Flutter app polls /auth/google/token/:id)
+    // Show success page — wallet Drive backup (not app login)
+    const appOrigin = process.env.APP_ORIGIN || process.env.CORS_ORIGINS?.split(',')[0]?.trim() || 'https://app.pinksurfing.com';
     res.send(`
       <!DOCTYPE html>
       <html>
       <head>
-        <title>PinkSurfing - Connected</title>
+        <title>PinkSurfing - Drive backup</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
         <style>
           body {
             background: #0D0D12;
@@ -63,27 +65,45 @@ router.get('/google/callback', async (req, res) => {
             align-items: center;
             min-height: 100vh;
             margin: 0;
+            padding: 16px;
           }
           .card {
             text-align: center;
-            padding: 48px;
+            padding: 32px 24px;
             background: #1A1A24;
             border-radius: 16px;
             max-width: 400px;
           }
           .check { font-size: 48px; margin-bottom: 16px; }
           h2 { margin: 0 0 8px; font-size: 20px; }
-          p { color: #A4A4AD; font-size: 14px; margin: 0; }
+          p { color: #A4A4AD; font-size: 14px; margin: 0 0 12px; line-height: 1.45; }
           .email { color: #6EE7FF; font-weight: 600; }
+          .note { font-size: 12px; color: #6B4C80; margin-top: 16px; }
+          a.btn {
+            display: inline-block;
+            margin-top: 20px;
+            padding: 12px 24px;
+            background: #FF7AD1;
+            color: #0D0D12;
+            text-decoration: none;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 14px;
+          }
         </style>
       </head>
       <body>
         <div class="card">
           <div class="check">✓</div>
           <h2>Google Drive Connected</h2>
+          <p>Wallet backup only — this is <strong>not</strong> PinkSurfing app sign-in.</p>
           <p>Signed in as <span class="email">${result.email || 'unknown'}</span></p>
-          <p style="margin-top: 16px;">You can close this window and return to the app.</p>
+          <a class="btn" href="${appOrigin}">Return to PinkSurfing</a>
+          <p class="note">If you meant to log in, use &quot;Continue with Google&quot; on the sign-in screen.</p>
         </div>
+        <script>
+          try { if (window.opener) { window.opener.postMessage({ type: 'ps-drive-oauth-done' }, '*'); window.close(); } } catch (e) {}
+        </script>
       </body>
       </html>
     `);
