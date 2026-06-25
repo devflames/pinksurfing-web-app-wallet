@@ -1107,8 +1107,19 @@ export function AppShell() {
 
   const chatFallback =
     isChatSection && !active ? (
-      <div className="flex flex-1 items-center justify-center p-6 text-center text-[11px] text-[var(--ps-muted)]">
-        Loading chats…
+      <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center text-[11px] text-[var(--ps-muted)]">
+        {contactsLoading ? (
+          <>Loading chats…</>
+        ) : liveContactsEmpty || list.length === 0 ? (
+          <>
+            <span className="text-[var(--ps-white)]">No chats yet</span>
+            <span>
+              Scan a business or PayChat QR (Share / Explore) to add your first contact.
+            </span>
+          </>
+        ) : (
+          <>Loading chats…</>
+        )}
       </div>
     ) : null;
 
