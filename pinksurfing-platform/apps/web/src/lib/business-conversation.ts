@@ -35,5 +35,6 @@ export function resolveBusinessConversation(
     return demoConversationForContact(contact.id);
   }
 
-  return demoConversationForContact(contact.id);
+  // Live mode: demo contacts without a peer userId cannot use contracts API
+  return null;
 }

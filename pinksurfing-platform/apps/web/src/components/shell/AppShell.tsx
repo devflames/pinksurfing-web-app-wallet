@@ -1136,7 +1136,8 @@ export function AppShell() {
           {authError && <span className="text-[var(--ps-red)]">Auth: {authError}</span>}
           {showBusinessContractsError && !authError && (
             <span className="text-[var(--ps-amber)]">
-              Contracts unavailable — start gateway for live data. Demo chat still works.
+              Contracts: {contractsError}
+              {liveContactsEmpty ? ' — add a real business contact (QR scan), not demo chats.' : ''}
             </span>
           )}
           {showContactsWarning && !authError && (

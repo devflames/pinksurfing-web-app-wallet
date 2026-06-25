@@ -2,31 +2,26 @@
 
 Stop asking Shaiquel questions. Run these on the servers.
 
-## A) Wallet droplet (`ps-wallet-backend`, `64.23.198.129`)
+## A) App + wallet — Contabo (`173.249.48.238`, `vmi3338208.contaboserver.net`)
 
-You are already in the DO web console as `root`.
+**`ps-wallet-backend`** (Matt wallet `:3099` + Python KeyVault `:5002`) runs here with Next.js + gateway — **not** on DigitalOcean.
 
 ```bash
-apt-get update && apt-get install -y git curl
-mkdir -p /opt/pinksurfing && cd /opt/pinksurfing
-git clone https://github.com/devflames/pinksurfing-web-app-wallet.git pinksurfing-web-app-wallet 2>/dev/null || true
-cd pinksurfing-web-app-wallet && git pull
-bash scripts/bootstrap-wallet-vps.sh
+ssh root@173.249.48.238
+cd /opt/pinksurfing-web-app-wallet && git pull
+bash scripts/bootstrap-wallet-vps.sh   # wallet only — or deploy-build.sh for full stack
 ```
 
-Then set secrets (get `JWT_SIGNING_KEY` from whoever runs `auth.pinksurfing.com`):
+Secrets (`JWT_SIGNING_KEY` must match `auth.pinksurfing.com`):
 
 ```bash
 nano /opt/pinksurfing-web-app-wallet/ps-wallet-backend-matt-created/.env
-# JWT_SIGNING_KEY=...
-# PINATA_JWT=...
-# SERVER_ENCRYPTION_KEY=$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")
 pm2 restart ps-wallet ps-keyvault
-curl -s http://127.0.0.1:3099/health | head -c 400; echo
-curl -s http://127.0.0.1:5002/health | head -c 400; echo
+curl -s http://127.0.0.1:3099/health; echo
+curl -s http://127.0.0.1:5002/health; echo
 ```
 
-## B) App VPS (`app.pinksurfing.com` — web + gateway)
+## B) Same box — full web rebuild (`app.pinksurfing.com`)
 
 ```bash
 cd /opt/pinksurfing-web-app-wallet && git pull
@@ -43,7 +38,7 @@ $env:GATEWAY_URL = "https://app.pinksurfing.com"
 node C:\CodeBase\scripts\test-live-paths-phase2.js
 ```
 
-## C) Coreapi (`coreapi.pinksurfing.com` — chat/contracts)
+## C) Coreapi — DigitalOcean (`coreapi.pinksurfing.com` → `24.199.119.184`, droplet `marketplace-s-1vcpu-2gb-sfo3`)
 
 From Windows (needs SSH key on coreapi, not password):
 
