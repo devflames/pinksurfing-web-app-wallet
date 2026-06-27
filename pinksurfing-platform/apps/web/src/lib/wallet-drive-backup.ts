@@ -104,8 +104,9 @@ export async function uploadEncryptedBackupToDrive(
 
   const existingId = await listDriveBackupFile(accessToken);
   const form = new FormData();
+  const fileBytes = Uint8Array.from(bytes);
   form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-  form.append('file', new Blob([bytes], { type: 'application/octet-stream' }));
+  form.append('file', new Blob([fileBytes], { type: 'application/octet-stream' }));
 
   const url = existingId
     ? `https://www.googleapis.com/upload/drive/v3/files/${existingId}?uploadType=multipart&fields=id`
