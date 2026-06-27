@@ -16,13 +16,27 @@ type WalletOAuthToken = {
     refreshToken?: string | null;
     email?: string | null;
   };
+  message?: string;
 };
+
+function base64ToBytes(value: string): Uint8Array {
+  if (typeof Buffer !== 'undefined') {
+    return new Uint8Array(Buffer.from(value, 'base64'));
+  }
+  const binary = atob(value);
+  const out = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);
+  return out;
+}
 
 export async function startWalletDriveOAuth(): Promise<{ url: string; sessionId: string }> {
   const res = await fetch(`${getWalletBase()}/auth/google?json=true`);
   const body = (await res.json().catch(() => ({}))) as WalletOAuthStart;
   if (!res.ok || !body.data?.url || !body.data.sessionId) {
-    throw new Error('Google Drive backup is not configured on the wallet server');
+    throw new Error(
+      (body as { message?: string }).message ||
+        'Google Drive backup is not configured on the wallet server'
+    );
   }
   return body.data;
 }
@@ -40,77 +54,87 @@ export async function pollWalletDriveToken(
     }
     const body = (await res.json().catch(() => ({}))) as WalletOAuthToken;
     if (!res.ok || !body.data?.accessToken) {
-      throw new Error('Could not complete Google Drive authorization');
+      throw new Error(body.message || 'Could not complete Google Drive authorization');
     }
     return { accessToken: body.data.accessToken, email: body.data.email };
   }
-  throw new Error('Google Drive authorization timed out');
+  throw new Error('Google Drive authorization timed out — complete sign-in in the popup');
+}
+
+/** Open Google OAuth popup and poll wallet server for Drive token. */
+export async function authorizeGoogleDriveForWallet(): Promise<{
+  accessToken: string;
+  email?: string | null;
+}> {
+  const { url, sessionId } = await startWalletDriveOAuth();
+  const popup = window.open(url, 'pinksurfing-drive', 'width=520,height=720');
+  if (!popup) {
+    throw new Error(
+      'Allow pop-ups for app.pinksurfing.com to use Google Drive backup, then try again.'
+    );
+  }
+  return pollWalletDriveToken(sessionId);
+}
+
+async function listDriveBackupFile(accessToken: string): Promise<string | null> {
+  const q = encodeURIComponent(`name='${DRIVE_FILE}' and trashed=false`);
+  const listRes = await fetch(
+    `https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&fields=files(id,name)&q=${q}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  const list = (await listRes.json().catch(() => ({}))) as {
+    files?: { id: string }[];
+    error?: { message?: string };
+  };
+  if (!listRes.ok) {
+    throw new Error(list.error?.message || 'Could not list Google Drive app folder');
+  }
+  return list.files?.[0]?.id ?? null;
 }
 
 export async function uploadEncryptedBackupToDrive(
   accessToken: string,
   encryptedBackupBase64: string
 ): Promise<void> {
+  const bytes = base64ToBytes(encryptedBackupBase64);
   const metadata = {
     name: DRIVE_FILE,
-    parents: ['appDataFolder'],
+    mimeType: 'application/octet-stream',
   };
 
-  const boundary = `pinksurfing-${Date.now()}`;
-  const body =
-    `--${boundary}\r\n` +
-    'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
-    `${JSON.stringify(metadata)}\r\n` +
-    `--${boundary}\r\n` +
-    'Content-Type: application/octet-stream\r\n\r\n' +
-    `${encryptedBackupBase64}\r\n` +
-    `--${boundary}--`;
+  const existingId = await listDriveBackupFile(accessToken);
+  const form = new FormData();
+  form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+  form.append('file', new Blob([bytes], { type: 'application/octet-stream' }));
 
-  const listRes = await fetch(
-    'https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=' +
-      encodeURIComponent(`name='${DRIVE_FILE}'`),
-    { headers: { Authorization: `Bearer ${accessToken}` } }
-  );
-  const list = (await listRes.json().catch(() => ({}))) as {
-    files?: { id: string }[];
-  };
-
-  const existingId = list.files?.[0]?.id;
   const url = existingId
-    ? `https://www.googleapis.com/upload/drive/v3/files/${existingId}?uploadType=multipart`
-    : 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
+    ? `https://www.googleapis.com/upload/drive/v3/files/${existingId}?uploadType=multipart&fields=id`
+    : 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id&spaces=appDataFolder';
 
   const uploadRes = await fetch(url, {
     method: existingId ? 'PATCH' : 'POST',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': `multipart/related; boundary=${boundary}`,
-    },
-    body,
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: form,
   });
 
   if (!uploadRes.ok) {
-    throw new Error('Failed to upload backup to Google Drive');
+    const err = (await uploadRes.json().catch(() => ({}))) as { error?: { message?: string } };
+    throw new Error(err.error?.message || 'Failed to upload backup to Google Drive');
   }
 }
 
 export async function downloadEncryptedBackupFromDrive(
   accessToken: string
 ): Promise<string | null> {
-  const listRes = await fetch(
-    'https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=' +
-      encodeURIComponent(`name='${DRIVE_FILE}'`),
-    { headers: { Authorization: `Bearer ${accessToken}` } }
-  );
-  const list = (await listRes.json().catch(() => ({}))) as {
-    files?: { id: string }[];
-  };
-  const fileId = list.files?.[0]?.id;
+  const fileId = await listDriveBackupFile(accessToken);
   if (!fileId) return null;
 
   const fileRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
-  if (!fileRes.ok) return null;
+  if (!fileRes.ok) {
+    const err = (await fileRes.json().catch(() => ({}))) as { error?: { message?: string } };
+    throw new Error(err.error?.message || 'Could not download backup from Google Drive');
+  }
   return fileRes.text();
 }

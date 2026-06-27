@@ -55,6 +55,7 @@ type Props = {
   onRequestsChange: (list: BusinessContactRequest[]) => void;
   onOpenPaychat: () => void;
   onVisitProfile: (contactId: string) => void;
+  onContactsRefresh?: () => void;
 };
 
 function peerUserIdFromPerson(p: DiscoverPerson): string | undefined {
@@ -90,6 +91,7 @@ export function FindPeopleOverlay({
   onRequestsChange,
   onOpenPaychat,
   onVisitProfile,
+  onContactsRefresh,
 }: Props) {
   const email = user?.email ?? 'guest';
   const myPayId = paychatInviteCodeForUser(user);
@@ -182,6 +184,7 @@ export function FindPeopleOverlay({
       const next = await fetchBusinessRequests(token);
       onRequestsChange(next);
       onRefresh();
+      onContactsRefresh?.();
       return;
     }
     const next = approveBusinessRequest(email, id);

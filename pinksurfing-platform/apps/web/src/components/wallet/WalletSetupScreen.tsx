@@ -4,14 +4,14 @@ import { useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import {
   deriveWalletFromMnemonic,
+  decryptBackupBlob,
   downloadRecoveryPhraseFile,
   encryptBackupBlob,
   isValidMnemonic,
 } from '@/lib/wallet-crypto';
 import {
+  authorizeGoogleDriveForWallet,
   downloadEncryptedBackupFromDrive,
-  pollWalletDriveToken,
-  startWalletDriveOAuth,
   uploadEncryptedBackupToDrive,
 } from '@/lib/wallet-drive-backup';
 import { buildProfileRegisterAuth } from '@/lib/wallet-ed25519-auth';
@@ -95,12 +95,12 @@ export function WalletRestoreScreen({ onComplete }: Props) {
     setDriveBusy(true);
     setError(null);
     try {
-      const { url, sessionId } = await startWalletDriveOAuth();
-      window.open(url, 'pinksurfing-drive', 'width=520,height=720');
-      const { accessToken } = await pollWalletDriveToken(sessionId);
+      const { accessToken } = await authorizeGoogleDriveForWallet();
       const encrypted = await downloadEncryptedBackupFromDrive(accessToken);
       if (!encrypted) {
-        throw new Error('No backup found in Google Drive');
+        throw new Error(
+          'No backup found in Google Drive for this Google account. Use the same account you used when backing up, or restore with your recovery phrase.'
+        );
       }
       const phrase = window.prompt(
         'Enter your recovery phrase to decrypt the Drive backup:'
@@ -108,7 +108,12 @@ export function WalletRestoreScreen({ onComplete }: Props) {
       if (!phrase || !isValidMnemonic(phrase)) {
         throw new Error('Recovery phrase required to decrypt Drive backup');
       }
-      const derived = await deriveWalletFromMnemonic(phrase);
+      const payload = await decryptBackupBlob(encrypted.trim(), phrase);
+      const restoredMnemonic = String(payload.mnemonic ?? '');
+      if (!isValidMnemonic(restoredMnemonic)) {
+        throw new Error('Drive backup could not be decrypted — check your recovery phrase');
+      }
+      const derived = await deriveWalletFromMnemonic(restoredMnemonic);
       await restoreFromDerived(derived);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Drive restore failed');
@@ -283,9 +288,7 @@ export function WalletSetupScreen({ onComplete }: Props) {
         signingPk: derived.signingPk,
       };
       const encrypted = await encryptBackupBlob(backupPayload, derived.mnemonic);
-      const { url, sessionId } = await startWalletDriveOAuth();
-      window.open(url, 'pinksurfing-drive', 'width=520,height=720');
-      const { accessToken } = await pollWalletDriveToken(sessionId);
+      const { accessToken } = await authorizeGoogleDriveForWallet();
       await uploadEncryptedBackupToDrive(accessToken, encrypted);
       if (user?.email) {
         await updateWalletSecrets(user.email, { backedUpToDrive: true });

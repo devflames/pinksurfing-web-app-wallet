@@ -1125,6 +1125,7 @@ export function AppShell() {
       onVisitProfile={(contactId: string) => {
         openBusinessProfile(contactId);
       }}
+      onContactsRefresh={() => void reloadContacts()}
     />
   );
 
@@ -1175,8 +1176,10 @@ export function AppShell() {
     <ShellNavProvider section={section} shopMode={shopMode} onNavigate={handleNavigate}>
     <BusinessRequestAcceptanceWatcher
       email={user?.email ?? 'guest'}
+      userId={userId}
       requests={businessRequests}
       onRefresh={refreshBusinessRequests}
+      onContactsRefresh={() => void reloadContacts()}
       onOpenRequests={() => {
         setHomeMainOverlay('find');
         handleNavigate('home');
