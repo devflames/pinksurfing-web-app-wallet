@@ -175,19 +175,66 @@ function resolveRegistryBusiness(code: string): { contactId: string; label: stri
   return { contactId, label: entry.name };
 }
 
-export function buildQrPayload(kind: QrJoinKind, code: string): string {
-  return `${qrJoinBaseUrl()}/join/${kind}/${encodeURIComponent(code.trim().toUpperCase())}`;
+export type ParsedQrInput = { kind: QrJoinKind; code: string; email?: string };
+
+export function buildQrPayload(
+  kind: QrJoinKind,
+  code: string,
+  opts?: { email?: string }
+): string {
+  const base = `${qrJoinBaseUrl()}/join/${kind}/${encodeURIComponent(code.trim().toUpperCase())}`;
+  if (kind === 'business' && opts?.email?.trim()) {
+    return `${base}?email=${encodeURIComponent(opts.email.trim())}`;
+  }
+  return base;
 }
 
-export function parseQrInput(raw: string): { kind: QrJoinKind; code: string } | null {
+export function parseQrInput(raw: string): ParsedQrInput | null {
   const trimmed = raw.trim();
   if (!trimmed) return null;
 
+  if (trimmed.includes('@') && !/\s/.test(trimmed)) {
+    const email = trimmed.toLowerCase();
+    return {
+      kind: 'business',
+      code: businessInviteCodeForUser({ email } as SessionUser),
+      email,
+    };
+  }
+
+  try {
+    if (/^https?:\/\//i.test(trimmed)) {
+      const url = new URL(trimmed);
+      const pathMatch = url.pathname.match(/\/join\/(business|paychat)\/([^/]+)/i);
+      if (pathMatch) {
+        const email = url.searchParams.get('email')?.trim().toLowerCase() || undefined;
+        return {
+          kind: pathMatch[1] as QrJoinKind,
+          code: decodeURIComponent(pathMatch[2]).toUpperCase(),
+          email,
+        };
+      }
+    }
+  } catch {
+    /* ignore malformed URLs */
+  }
+
   const urlMatch = trimmed.match(
-    /(?:app\.)?pinksurfing\.com\/join\/(business|paychat)\/([^/?#]+)/i
+    /(?:app\.)?pinksurfing\.com\/join\/(business|paychat)\/([^/?#]+)(?:\?([^#]*))?/i
   );
   if (urlMatch) {
-    return { kind: urlMatch[1] as QrJoinKind, code: decodeURIComponent(urlMatch[2]).toUpperCase() };
+    const email =
+      urlMatch[3]
+        ?.split('&')
+        .map((part) => part.split('='))
+        .find(([key]) => key.toLowerCase() === 'email')?.[1]
+        ?.trim()
+        .toLowerCase() || undefined;
+    return {
+      kind: urlMatch[1] as QrJoinKind,
+      code: decodeURIComponent(urlMatch[2]).toUpperCase(),
+      email: email ? decodeURIComponent(email) : undefined,
+    };
   }
 
   const schemeMatch = trimmed.match(/^pinksurfing:\/\/join\/(business|paychat)\/(.+)$/i);

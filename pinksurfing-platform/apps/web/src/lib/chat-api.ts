@@ -509,6 +509,33 @@ export async function addBusinessContactByEmail(token: string, email: string): P
   }
 }
 
+type DiscoverPeopleResponse = {
+  status: string;
+  data?: Array<{
+    userId: string;
+    firstName?: string;
+    lastName?: string;
+    email: string;
+    profileImage?: string;
+    industry?: string;
+    location?: string;
+    position?: string;
+    status?: string;
+  }>;
+  message?: string;
+};
+
+export async function fetchDiscoverPeople(token: string): Promise<DiscoverPeopleResponse['data']> {
+  const res = await fetch(`${CHAT_BASE}/users/discover?count=50`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const body = (await res.json().catch(() => ({}))) as DiscoverPeopleResponse;
+  if (!res.ok || body.status !== 'success') {
+    throw new Error(body.message ?? 'Could not load people');
+  }
+  return body.data ?? [];
+}
+
 export function chatTypeForContact(contact: Contact): string {
   if (contact.type === 'business') return 'business';
   if (contact.type === 'paychat') return 'paychat';

@@ -1,12 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { withBasePath } from '@/lib/base-path';
 import { isChatLive } from '@/lib/chat-api';
 import { executeQrJoin, QrJoinError } from '@/lib/qr-join-service';
 import {
+  qrJoinBaseUrl,
   stashPendingQrJoin,
   stashQrJoinResult,
   type QrJoinKind,
@@ -14,12 +15,14 @@ import {
 
 export default function JoinPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const router = useRouter();
   const { token, loading } = useAuth();
   const [message, setMessage] = useState('Opening invite…');
 
   const kind = String(params.kind ?? '') as QrJoinKind;
   const code = decodeURIComponent(String(params.code ?? ''));
+  const email = searchParams.get('email');
 
   useEffect(() => {
     if (kind !== 'business' && kind !== 'paychat') {
@@ -32,8 +35,12 @@ export default function JoinPage() {
     }
     if (loading) return;
 
+    const joinRaw = email
+      ? `${qrJoinBaseUrl()}/join/${kind}/${encodeURIComponent(code)}?email=${encodeURIComponent(email)}`
+      : code;
+
     if (!token) {
-      stashPendingQrJoin(kind, code);
+      stashPendingQrJoin(kind, joinRaw);
       router.replace(withBasePath('/'));
       return;
     }
@@ -45,7 +52,7 @@ export default function JoinPage() {
         setMessage('Adding contact…');
         const result = await executeQrJoin({
           kind,
-          raw: code,
+          raw: joinRaw,
           token,
           live: isChatLive(),
         });
@@ -64,7 +71,7 @@ export default function JoinPage() {
     return () => {
       cancelled = true;
     };
-  }, [kind, code, token, loading, router]);
+  }, [kind, code, email, token, loading, router]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-black p-6 text-center">

@@ -34,6 +34,7 @@ const SAMPLE_PAYCHAT = {
 };
 
 export function QrJoinModal({ kind, open, token, onClose, onJoin }: Props) {
+  const live = isChatLive();
   const [mode, setMode] = useState<'scan' | 'manual'>('scan');
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -56,9 +57,18 @@ export function QrJoinModal({ kind, open, token, onClose, onJoin }: Props) {
     if (!parsed || parsed.kind !== kind) {
       setError(
         kind === 'business'
-          ? 'Invalid business code. Scan their card QR or enter their business invite code.'
-          : 'Invalid PayChat code. Scan their PayChat QR or enter their PS- ID.'
+          ? live
+            ? 'Paste their Share-tab join link or business email.'
+            : 'Invalid business code. Scan their card QR or enter their business invite code.'
+          : live
+            ? 'Paste their Share-tab join link or PayChat ID (PS-…).'
+            : 'Invalid PayChat code. Scan their PayChat QR or enter their PS- ID.'
       );
+      return;
+    }
+
+    if (live && !token) {
+      setError('Sign in to add contacts.');
       return;
     }
 
@@ -69,7 +79,7 @@ export function QrJoinModal({ kind, open, token, onClose, onJoin }: Props) {
         kind,
         raw,
         token,
-        live: isChatLive(),
+        live,
       });
       onJoin(entry.contactId);
       onClose();
@@ -84,6 +94,15 @@ export function QrJoinModal({ kind, open, token, onClose, onJoin }: Props) {
     kind === 'business'
       ? Object.keys(BUSINESS_QR_CODES).join(' · ')
       : Object.keys(PAYCHAT_QR_CODES).join(' · ');
+
+  const manualPlaceholder =
+    kind === 'business'
+      ? live
+        ? 'https://app.pinksurfing.com/join/business/… or name@company.com'
+        : 'PAINT-2024'
+      : live
+        ? 'https://app.pinksurfing.com/join/paychat/PS-…'
+        : 'PS-KIM-85';
 
   return (
     <div
@@ -107,8 +126,12 @@ export function QrJoinModal({ kind, open, token, onClose, onJoin }: Props) {
 
         <p className="mb-3 text-[10px] leading-relaxed text-[var(--ps-muted)]">
           {kind === 'business'
-            ? 'Scan a business card QR or enter their invite code to add them to Business contacts.'
-            : 'Scan their PayChat QR or enter their PayChat ID — they go in your You pay list.'}
+            ? live
+              ? 'Ask them to open Share and send you their business join link, or enter their business email.'
+              : 'Scan a business card QR or enter their invite code to add them to Business contacts.'
+            : live
+              ? 'Ask them to open Share and send you their PayChat join link, or enter their PayChat ID.'
+              : 'Scan their PayChat QR or enter their PayChat ID — they go in your You pay list.'}
         </p>
 
         <div className="mb-3 flex gap-2">
@@ -146,27 +169,33 @@ export function QrJoinModal({ kind, open, token, onClose, onJoin }: Props) {
               onError={(message) => setError(message)}
             />
             <p className="mt-2 text-center text-[9px] text-[var(--ps-dim)]">
-              Point your camera at their {kind === 'business' ? 'business' : 'PayChat'} card QR
+              {live
+                ? 'Camera unavailable on desktop? Switch to Enter code and paste their Share link.'
+                : `Point your camera at their ${kind === 'business' ? 'business' : 'PayChat'} card QR`}
             </p>
           </div>
         ) : (
           <>
-            <div className="mb-3">
-              {kind === 'business' ? (
-                <BusinessCardDisplay {...SAMPLE_BUSINESS} compact />
-              ) : (
-                <PayChatCardDisplay {...SAMPLE_PAYCHAT} compact />
-              )}
-            </div>
+            {!live && (
+              <div className="mb-3">
+                {kind === 'business' ? (
+                  <BusinessCardDisplay {...SAMPLE_BUSINESS} compact />
+                ) : (
+                  <PayChatCardDisplay {...SAMPLE_PAYCHAT} compact />
+                )}
+              </div>
+            )}
 
-            <label className="mb-1 block text-[10px] text-[var(--ps-dim)]">Invite code or QR link</label>
+            <label className="mb-1 block text-[10px] text-[var(--ps-dim)]">
+              {live ? 'Join link, email, or code' : 'Invite code or QR link'}
+            </label>
             <input
               value={code}
               onChange={(e) => {
                 setCode(e.target.value);
                 setError(null);
               }}
-              placeholder={kind === 'business' ? 'PAINT-2024' : 'PS-KIM-85'}
+              placeholder={manualPlaceholder}
               className="mb-2 w-full rounded-md border border-[var(--ps-brd)] bg-black px-3 py-2 text-[11px] text-[var(--ps-white)] outline-none focus:border-[var(--ps-pink)]"
               onKeyDown={(e) => e.key === 'Enter' && void tryJoin(code)}
             />
@@ -194,7 +223,9 @@ export function QrJoinModal({ kind, open, token, onClose, onJoin }: Props) {
           <p className="mt-2 text-center text-[10px] text-[var(--ps-muted)]">Adding contact…</p>
         )}
 
-        <p className="mt-3 text-center text-[9px] text-[var(--ps-dim)]">Demo codes: {demoCodes}</p>
+        {!live && (
+          <p className="mt-3 text-center text-[9px] text-[var(--ps-dim)]">Demo codes: {demoCodes}</p>
+        )}
       </div>
     </div>
   );

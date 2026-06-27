@@ -416,8 +416,62 @@ export function statesFromPeople(people: { state: string }[]): string[] {
   return ['All states', ...Array.from(new Set(people.map((p) => p.state))).sort()];
 }
 
-export function findDiscoverPerson(id: string): DiscoverPerson | undefined {
-  return discoverCatalog().find((p) => p.id === id);
+export function findDiscoverPerson(
+  id: string,
+  catalog?: DiscoverPerson[]
+): DiscoverPerson | undefined {
+  const list = catalog ?? discoverCatalog();
+  return list.find((p) => p.id === id);
+}
+
+export type LiveDiscoverAccount = {
+  userId: string;
+  firstName?: string;
+  lastName?: string;
+  email: string;
+  profileImage?: string;
+  industry?: string;
+  location?: string;
+  position?: string;
+  status?: string;
+};
+
+export function liveAccountToDiscoverPerson(
+  row: LiveDiscoverAccount,
+  index: number
+): DiscoverPerson {
+  const name =
+    [row.firstName, row.lastName].filter(Boolean).join(' ').trim() ||
+    row.email.split('@')[0];
+  const local = row.email
+    .split('@')[0]
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+    .slice(0, 12);
+  const location = row.location?.trim() || '—';
+  const geo = geoFor(location.includes(',') ? location : `${location}, TX`);
+
+  return {
+    id: `live-${row.userId}`,
+    userId: row.userId,
+    contactId: `live-${row.userId}`,
+    name,
+    businessName: name,
+    position: row.position?.trim() || 'Member',
+    industryCategory: row.industry?.trim() ? 'Business' : 'General',
+    industry: row.industry?.trim() || 'General',
+    location,
+    state: geo.state,
+    zip: geo.zip,
+    lat: geo.lat,
+    lng: geo.lng,
+    avatarUrl: row.profileImage?.trim() || AVATARS[index % AVATARS.length],
+    statusMood: row.status?.trim() || 'Available',
+    statusCategory: 'business',
+    paychatId: `PS-${local || 'USER'}`,
+    verified: true,
+    coldContactLikelihood: 'moderate',
+  };
 }
 
 const FIND_ZIP_KEY = 'ps-find-zip';

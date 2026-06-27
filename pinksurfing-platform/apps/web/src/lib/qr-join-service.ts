@@ -19,6 +19,7 @@ import {
   normalizePaychatCode,
   parseQrInput,
   resolveQrJoin,
+  type ParsedQrInput,
   type QrJoinKind,
 } from './qr-invite';
 
@@ -40,20 +41,24 @@ export async function executeQrJoin(opts: {
   if (!parsed || parsed.kind !== opts.kind) {
     throw new QrJoinError(
       opts.kind === 'business'
-        ? 'Invalid business invite. Scan their card QR or enter their business code.'
-        : 'Invalid PayChat invite. Scan their PayChat QR or enter their PS- ID.'
+        ? 'Invalid business invite. Paste their Share-tab link, business email, or invite code.'
+        : 'Invalid PayChat invite. Paste their Share-tab link or PayChat ID (PS-…).'
     );
   }
 
   const code = parsed.code;
-  let entry = resolveQrJoin(opts.kind, code);
+  let entry: { contactId: string; label: string } | null = null;
 
-  if (!entry && live && opts.token) {
-    if (opts.kind === 'paychat') {
-      entry = await joinPaychatLive(opts.token, code);
-    } else {
-      entry = await joinBusinessLive(opts.token, code);
+  if (live) {
+    if (!opts.token) {
+      throw new QrJoinError('Sign in to add contacts.');
     }
+    entry =
+      opts.kind === 'paychat'
+        ? await joinPaychatLive(opts.token, code)
+        : await joinBusinessLive(opts.token, code, parsed);
+  } else {
+    entry = resolveQrJoin(opts.kind, code);
   }
 
   if (!entry) {
@@ -84,6 +89,7 @@ async function joinPaychatLive(
   const paychatContacts = contacts.filter((c) => c.type === 'paychat');
   const match =
     paychatContacts.find((c) => c.name.toLowerCase() === registry?.name.toLowerCase()) ??
+    paychatContacts.find((c) => c.askUsd != null && registry?.askUsd != null) ??
     paychatContacts[paychatContacts.length - 1];
 
   if (match) {
@@ -120,13 +126,19 @@ async function joinPaychatLive(
 
 async function joinBusinessLive(
   token: string,
-  code: string
+  code: string,
+  parsed: ParsedQrInput
 ): Promise<{ contactId: string; label: string } | null> {
   const registry = findBusinessRegistryEntry(code);
-  if (!registry?.email) return null;
+  const email = parsed.email?.trim().toLowerCase() || registry?.email?.trim().toLowerCase();
+  if (!email) {
+    throw new QrJoinError(
+      'Business invite not found. Paste the full link from their Share tab, or enter their business email.'
+    );
+  }
 
   try {
-    await addBusinessContactByEmail(token, registry.email);
+    await addBusinessContactByEmail(token, email);
   } catch (e) {
     const msg = e instanceof Error ? e.message : '';
     if (!msg.toLowerCase().includes('already exists') && !msg.toLowerCase().includes('exists')) {
@@ -138,28 +150,30 @@ async function joinBusinessLive(
   const match = contacts.find(
     (c) =>
       c.type === 'business' &&
-      (c.userId === registry.userId ||
-        c.name.toLowerCase() === registry.name.toLowerCase())
+      (c.userId === registry?.userId ||
+        c.name.toLowerCase() === (registry?.name ?? '').toLowerCase())
   );
+
+  const label = match?.name ?? registry?.name ?? email.split('@')[0];
 
   if (match) {
     upsertDynamicBusinessContact({
       id: match.id,
       name: match.name,
-      code: registry.code,
-      email: registry.email,
-      userId: match.userId ?? registry.userId,
+      code: registry?.code ?? code,
+      email,
+      userId: match.userId ?? registry?.userId,
     });
     return { contactId: match.id, label: match.name };
   }
 
-  const contactId = dynamicBusinessContactId(registry.userId);
+  const contactId = dynamicBusinessContactId(registry?.userId ?? email);
   upsertDynamicBusinessContact({
     id: contactId,
-    name: registry.name,
-    code: registry.code,
-    email: registry.email,
-    userId: registry.userId,
+    name: label,
+    code: registry?.code ?? code,
+    email,
+    userId: registry?.userId,
   });
-  return { contactId, label: registry.name };
+  return { contactId, label };
 }

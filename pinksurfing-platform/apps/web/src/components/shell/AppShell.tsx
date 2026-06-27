@@ -644,22 +644,24 @@ export function AppShell() {
 
   const completeQrJoin = useCallback(
     (kind: 'business' | 'paychat', contactId: string) => {
-      refreshJoined();
-      if (kind === 'business') {
-        setSection('home');
-        setHomeTab('business');
-        setHomeActiveId(contactId);
-        joinContactViaQr('business', contactId);
-      } else {
-        setSection('paychat');
-        paychatSubTouched.current = true;
-        setPaychatSub('outgoing');
-        setPaychatActiveId(contactId);
-        joinContactViaQr('paychat', contactId);
-      }
-      setBusinessView('chat');
+      void reloadContacts().then(() => {
+        refreshJoined();
+        if (kind === 'business') {
+          setSection('home');
+          setHomeTab('business');
+          setHomeActiveId(contactId);
+          joinContactViaQr('business', contactId);
+        } else {
+          setSection('paychat');
+          paychatSubTouched.current = true;
+          setPaychatSub('outgoing');
+          setPaychatActiveId(contactId);
+          joinContactViaQr('paychat', contactId);
+        }
+        setBusinessView('chat');
+      });
     },
-    [refreshJoined]
+    [refreshJoined, reloadContacts]
   );
 
   const handleQrJoin = (contactId: string) => {

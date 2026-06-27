@@ -20,12 +20,13 @@ import {
   outgoingRequestsLive,
   sendBusinessRequestApi,
 } from '@/lib/business-contact-requests-api';
-import { isChatLive } from '@/lib/chat-api';
+import { isChatLive, fetchDiscoverPeople } from '@/lib/chat-api';
 import {
   discoverCatalog,
   defaultDiscoverFilters,
   filterDiscoverPeople,
   findDiscoverPerson,
+  liveAccountToDiscoverPerson,
   loadFindZip,
   saveFindZip,
   type DiscoverFilters,
@@ -102,9 +103,42 @@ export function FindPeopleOverlay({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [coldPromptPerson, setColdPromptPerson] = useState<DiscoverPerson | null>(null);
   const [outgoingOpen, setOutgoingOpen] = useState(false);
+  const [livePeople, setLivePeople] = useState<DiscoverPerson[]>([]);
+  const [liveLoading, setLiveLoading] = useState(false);
+  const [liveError, setLiveError] = useState<string | null>(null);
   const [filters, setFilters] = useState<DiscoverFilters>(() =>
     defaultDiscoverFilters(loadFindZip(email))
   );
+
+  useEffect(() => {
+    if (!live || !token) {
+      setLivePeople([]);
+      setLiveError(null);
+      return;
+    }
+    let cancelled = false;
+    setLiveLoading(true);
+    setLiveError(null);
+    void fetchDiscoverPeople(token)
+      .then((rows) => {
+        if (cancelled) return;
+        setLivePeople((rows ?? []).map((row, i) => liveAccountToDiscoverPerson(row, i)));
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setLiveError(e instanceof Error ? e.message : 'Could not load people');
+          setLivePeople([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLiveLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [live, token]);
+
+  const catalog = live ? livePeople : discoverCatalog();
 
   const incoming = useMemo(
     () => (live && userId ? incomingRequestsLive(requests, userId) : incomingRequests(email)),
@@ -120,11 +154,11 @@ export function FindPeopleOverlay({
   }, [email]);
 
   const filtered = useMemo(
-    () => filterDiscoverPeople(discoverCatalog(), filters),
-    [filters]
+    () => filterDiscoverPeople(catalog, filters),
+    [catalog, filters]
   );
 
-  const selected = selectedId ? findDiscoverPerson(selectedId) : null;
+  const selected = selectedId ? findDiscoverPerson(selectedId, catalog) : null;
 
   useEffect(() => {
     if (selectedId && !filtered.some((p) => p.id === selectedId)) {
@@ -148,7 +182,7 @@ export function FindPeopleOverlay({
     if (live && token) {
       const toUserId = peerUserIdFromPerson(person);
       if (!toUserId) {
-        window.alert('This listing is demo-only — connect via QR for live contacts.');
+        window.alert('Could not send request — this person is not available.');
         return;
       }
       await sendBusinessRequestApi(token, {
@@ -289,17 +323,37 @@ export function FindPeopleOverlay({
             filters={filters}
             onChange={patchFilters}
             meta={
-              <span className="text-[9px] text-[var(--ps-dim)]">{filtered.length} people</span>
+              <span className="text-[9px] text-[var(--ps-dim)]">
+                {liveLoading ? 'Loading…' : `${filtered.length} people`}
+                {live ? ' · live' : ''}
+              </span>
             }
-            hint="Tap once for mini profile"
+            hint={
+              live
+                ? 'Real PinkSurfing accounts — tap to connect'
+                : 'Tap once for mini profile'
+            }
           />
 
+          {liveError && (
+            <p className="px-3 py-2 text-[10px] text-[var(--ps-red)]">{liveError}</p>
+          )}
+
           <div className="ps-scroll min-h-0 flex-1 overflow-y-auto">
-            <FindPeopleGrid
-              people={filtered}
-              selectedId={selectedId}
-              onSelect={handleSelect}
-            />
+            {liveLoading ? (
+              <p className="p-4 text-center text-[10px] text-[var(--ps-dim)]">Loading people…</p>
+            ) : live && filtered.length === 0 ? (
+              <div className="p-4 text-center text-[10px] text-[var(--ps-dim)]">
+                <p className="mb-2 text-[var(--ps-muted)]">No other live users yet.</p>
+                <p>Share your QR from the Share tab, or invite someone to sign up on PinkSurfing.</p>
+              </div>
+            ) : (
+              <FindPeopleGrid
+                people={filtered}
+                selectedId={selectedId}
+                onSelect={handleSelect}
+              />
+            )}
           </div>
         </>
       ) : (

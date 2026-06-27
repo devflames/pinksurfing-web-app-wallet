@@ -71,7 +71,7 @@ export function BusinessCardDisplay({
   user,
   compact = false,
 }: Props) {
-  const qrValue = buildQrPayload('business', inviteCode);
+  const qrValue = buildQrPayload('business', inviteCode, { email });
   const displayName = credentials ? `${name} ${credentials}` : name;
   const storeLink = store ?? { type: 'none' as const };
   const logoClickable = storeLink.type !== 'none';

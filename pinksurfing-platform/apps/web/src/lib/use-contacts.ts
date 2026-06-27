@@ -90,7 +90,13 @@ export function useContacts(token: string | null) {
     (id: string): Contact | undefined => {
       const found = allContacts.find((c) => c.id === id);
       if (found) return found;
-      if (live) return undefined;
+      if (live) {
+        const dynamic = [
+          ...loadDynamicPaychatContacts().map(dynamicContactToUi),
+          ...loadDynamicBusinessContacts().map(dynamicBusinessContactToUi),
+        ];
+        return dynamic.find((c) => c.id === id);
+      }
       return DEMO_CONTACTS[id];
     },
     [allContacts, live]
