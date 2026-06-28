@@ -185,19 +185,25 @@ export function FindPeopleOverlay({
         window.alert('Could not send request — this person is not available.');
         return;
       }
-      await sendBusinessRequestApi(token, {
-        toUserId,
-        toBusinessId: person.id,
-        toBusinessName: person.businessName,
-        toContactName: person.name,
-        industry: person.industry,
-        industryCategory: person.industryCategory,
-        paychatId: person.paychatId,
-        fromName: displayName,
-        message: `Request to connect with ${person.businessName} via PinkSurfing search.`,
-      });
-      const next = await fetchBusinessRequests(token);
-      onRequestsChange(next);
+      try {
+        await sendBusinessRequestApi(token, {
+          toUserId,
+          toBusinessId: person.id,
+          toBusinessName: person.businessName,
+          toContactName: person.name,
+          industry: person.industry,
+          industryCategory: person.industryCategory,
+          paychatId: person.paychatId,
+          fromName: displayName,
+          message: `Request to connect with ${person.businessName} via PinkSurfing search.`,
+        });
+        const next = await fetchBusinessRequests(token);
+        onRequestsChange(next);
+        setTab('requests');
+        setOutgoingOpen(true);
+      } catch (e) {
+        window.alert(e instanceof Error ? e.message : 'Could not send request');
+      }
       return;
     }
     const next = sendBusinessRequest(email, toDirectory(person), displayName, myPayId);

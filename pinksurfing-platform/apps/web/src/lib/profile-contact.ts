@@ -20,9 +20,7 @@ export function invoiceSenderForUser(user: SessionUser | null): InvoiceSender {
   return {
     name,
     position: profile.position,
-    address: profile.location.includes(',') && profile.location.length > 12
-      ? profile.location
-      : DEFAULT_BUSINESS_ADDRESS,
+    address: profile.location?.trim() || '',
     phone: DEFAULT_BUSINESS_PHONE,
     email: user?.email ?? 'billing@pinksurfing.com',
   };

@@ -1,7 +1,7 @@
 import { getApiBase } from './api-client';
 import type { BusinessContactRequest } from './business-contact-requests';
 
-const BASE = () => `${getApiBase()}/chat/business-requests`;
+const BASE = () => `${getApiBase()}/chat/chats/business-requests`;
 
 type ListResponse = {
   status: string;

@@ -53,18 +53,18 @@ function businessKey(email: string): string {
 export function defaultPersonalDetails(user: SessionUser | null): PersonalDetails {
   const name = displayName(user);
   const parts = name.trim().split(/\s+/);
-  const lastName = parts.length > 1 ? parts.slice(1).join(' ') : 'PS marketing';
+  const lastName = parts.length > 1 ? parts.slice(1).join(' ') : '';
   return {
     lastName,
-    dateOfBirth: '09-08-1982',
-    streetAddress: '800 W El Camino Real',
-    unit: 'Suite 180',
+    dateOfBirth: '',
+    streetAddress: '',
+    unit: '',
     mobilePhone: '',
     personalEmail: user?.email ?? '',
-    city: 'Mountain View',
-    postcode: '94040',
-    country: 'United States of America',
-    state: 'California',
+    city: '',
+    postcode: '',
+    country: '',
+    state: '',
   };
 }
 
@@ -72,16 +72,16 @@ export function defaultBusinessDetails(user: SessionUser | null): BusinessDetail
   const profile = profileForUser(user, DEFAULT_PROFILE);
   return {
     countryCode: '+1',
-    businessName: profile.businessName || 'PinkSurfing',
-    businessPhone: DEFAULT_BUSINESS_PHONE,
-    businessEmail: user?.email ?? 'marketing@pinksurfing.com',
-    website: 'www.pinksurfing.com',
-    streetAddress: '800 W. El Camino Real',
-    unit: 'Suite 180',
-    city: 'Mountain View',
-    postcode: '94040',
-    country: 'United States of America',
-    state: 'California',
+    businessName: profile.businessName || displayName(user) || 'PinkSurfing',
+    businessPhone: '',
+    businessEmail: user?.email ?? '',
+    website: '',
+    streetAddress: '',
+    unit: '',
+    city: '',
+    postcode: '',
+    country: '',
+    state: '',
     coldContactLikelihood: DEFAULT_COLD_CONTACT,
   };
 }
