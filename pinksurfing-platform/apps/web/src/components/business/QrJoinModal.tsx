@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { QrScanner } from '@/components/business/QrScanner';
 import { BusinessCardDisplay } from '@/components/cards/BusinessCardDisplay';
 import { PayChatCardDisplay } from '@/components/cards/PayChatCardDisplay';
@@ -39,18 +39,47 @@ export function QrJoinModal({ kind, open, token, onClose, onJoin }: Props) {
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [mounted, setMounted] = useState(open);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const reset = useCallback(() => {
     setCode('');
     setError(null);
     setBusy(false);
+    setMode('scan');
   }, []);
 
+  const requestClose = useCallback(() => {
+    setMode('manual');
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = setTimeout(() => {
+      closeTimerRef.current = null;
+      onClose();
+    }, 200);
+  }, [onClose]);
+
   useEffect(() => {
-    if (!open) reset();
+    if (open) {
+      if (closeTimerRef.current) {
+        clearTimeout(closeTimerRef.current);
+        closeTimerRef.current = null;
+      }
+      setMounted(true);
+      return;
+    }
+    reset();
+    const t = setTimeout(() => setMounted(false), 250);
+    return () => clearTimeout(t);
   }, [open, reset]);
 
-  if (!open) return null;
+  useEffect(
+    () => () => {
+      if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    },
+    []
+  );
+
+  if (!mounted) return null;
 
   const tryJoin = async (raw: string) => {
     const parsed = parseQrInput(raw);
@@ -82,7 +111,7 @@ export function QrJoinModal({ kind, open, token, onClose, onJoin }: Props) {
         live,
       });
       onJoin(entry.contactId);
-      onClose();
+      requestClose();
     } catch (e) {
       setError(e instanceof QrJoinError || e instanceof Error ? e.message : 'Could not add contact');
     } finally {
@@ -106,8 +135,10 @@ export function QrJoinModal({ kind, open, token, onClose, onJoin }: Props) {
 
   return (
     <div
-      className="absolute inset-0 z-30 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
+      className={`absolute inset-0 z-30 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm transition-opacity ${
+        open ? 'opacity-100' : 'pointer-events-none opacity-0'
+      }`}
+      onClick={(e) => e.target === e.currentTarget && requestClose()}
     >
       <div className="max-h-[90vh] w-full max-w-sm overflow-y-auto rounded-xl border border-[var(--ps-pink)]/40 bg-[var(--ps-card)] p-4">
         <div className="mb-3 flex items-center justify-between gap-2">
@@ -116,7 +147,7 @@ export function QrJoinModal({ kind, open, token, onClose, onJoin }: Props) {
           </h2>
           <button
             type="button"
-            onClick={onClose}
+            onClick={requestClose}
             className="text-lg leading-none text-[var(--ps-muted)] hover:text-white"
             aria-label="Close"
           >
@@ -148,7 +179,10 @@ export function QrJoinModal({ kind, open, token, onClose, onJoin }: Props) {
           </button>
           <button
             type="button"
-            onClick={() => setMode('manual')}
+            onClick={() => {
+              setError(null);
+              setMode('manual');
+            }}
             className={`flex-1 rounded-lg py-2 text-[10px] font-semibold ${
               mode === 'manual'
                 ? 'bg-[var(--ps-pink)] text-black'
@@ -159,22 +193,22 @@ export function QrJoinModal({ kind, open, token, onClose, onJoin }: Props) {
           </button>
         </div>
 
-        {mode === 'scan' ? (
-          <div className="mb-3">
-            <QrScanner
-              active={open && mode === 'scan'}
-              onScan={(text) => {
-                void tryJoin(text);
-              }}
-              onError={(message) => setError(message)}
-            />
-            <p className="mt-2 text-center text-[9px] text-[var(--ps-dim)]">
-              {live
-                ? 'Camera unavailable on desktop? Switch to Enter code and paste their Share link.'
-                : `Point your camera at their ${kind === 'business' ? 'business' : 'PayChat'} card QR`}
-            </p>
-          </div>
-        ) : (
+        <div className={`mb-3 ${mode === 'scan' ? '' : 'hidden'}`} aria-hidden={mode !== 'scan'}>
+          <QrScanner
+            active={open && mode === 'scan'}
+            onScan={(text) => {
+              void tryJoin(text);
+            }}
+            onError={(message) => setError(message)}
+          />
+          <p className="mt-2 text-center text-[9px] text-[var(--ps-dim)]">
+            {live
+              ? 'Camera unavailable on desktop? Switch to Enter code and paste their Share link.'
+              : `Point your camera at their ${kind === 'business' ? 'business' : 'PayChat'} card QR`}
+          </p>
+        </div>
+
+        {mode === 'manual' && (
           <>
             {!live && (
               <div className="mb-3">
