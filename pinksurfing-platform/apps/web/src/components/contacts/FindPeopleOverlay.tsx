@@ -141,17 +141,22 @@ export function FindPeopleOverlay({
   const catalog = live ? livePeople : discoverCatalog();
 
   const incoming = useMemo(
-    () => (live && userId ? incomingRequestsLive(requests, userId) : incomingRequests(email)),
-    [email, live, requests, userId]
+    () => (live ? incomingRequestsLive(requests) : incomingRequests(email)),
+    [email, live, requests]
   );
   const outgoing = useMemo(
-    () => (live && userId ? outgoingRequestsLive(requests, userId) : outgoingRequests(email)),
-    [email, live, requests, userId]
+    () => (live ? outgoingRequestsLive(requests) : outgoingRequests(email)),
+    [email, live, requests]
   );
 
   useEffect(() => {
-    if (incoming.length > 0) setTab('requests');
-  }, [email]);
+    if (!live || !token) return;
+    void onRefresh();
+  }, [live, token, onRefresh]);
+
+  useEffect(() => {
+    if (live && incoming.length > 0) setTab('requests');
+  }, [live, incoming.length]);
 
   const filtered = useMemo(
     () => filterDiscoverPeople(catalog, filters),

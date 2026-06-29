@@ -24,9 +24,12 @@ async function postJson<T>(token: string, path: string, body: unknown): Promise<
     },
     body: JSON.stringify(body),
   });
-  const parsed = (await res.json().catch(() => ({}))) as T & { message?: string };
+  const parsed = (await res.json().catch(() => ({}))) as T & { message?: string; status?: string };
   if (!res.ok) {
     throw new Error((parsed as { message?: string }).message || res.statusText);
+  }
+  if (parsed.status === 'error' || parsed.status === 'fail') {
+    throw new Error((parsed as { message?: string }).message || 'Request failed');
   }
   return parsed;
 }
@@ -74,20 +77,18 @@ export async function declineBusinessRequestApi(
 }
 
 export function incomingRequestsLive(
-  requests: BusinessContactRequest[],
-  userId: string
+  requests: BusinessContactRequest[]
 ): BusinessContactRequest[] {
   return requests.filter(
-    (r) => r.status === 'pending' && r.toUserId === userId
+    (r) => r.status === 'pending' && r.viewerRole === 'incoming'
   );
 }
 
 export function outgoingRequestsLive(
-  requests: BusinessContactRequest[],
-  userId: string
+  requests: BusinessContactRequest[]
 ): BusinessContactRequest[] {
   return requests
-    .filter((r) => r.fromUserId === userId)
+    .filter((r) => r.viewerRole === 'outgoing')
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
@@ -95,5 +96,10 @@ export function hasPendingRequestLive(
   requests: BusinessContactRequest[],
   toUserId: string
 ): boolean {
-  return requests.some((r) => r.toUserId === toUserId && r.status === 'pending');
+  return requests.some(
+    (r) =>
+      r.viewerRole === 'outgoing' &&
+      r.toUserId === toUserId &&
+      r.status === 'pending'
+  );
 }

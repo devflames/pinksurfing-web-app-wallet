@@ -29,13 +29,12 @@ function saveAcceptedSeenIds(email: string, ids: Set<string>): void {
 
 function popUnnotifiedAcceptedOutgoingLive(
   requests: BusinessContactRequest[],
-  userId: string,
   email: string
 ): BusinessContactRequest[] {
   const seen = loadAcceptedSeenIds(email);
   const fresh = requests.filter(
     (r) =>
-      r.fromUserId === userId &&
+      r.viewerRole === 'outgoing' &&
       r.status === 'approved' &&
       !seen.has(r.id)
   );
@@ -69,7 +68,7 @@ export function BusinessRequestAcceptanceWatcher({
 
   useEffect(() => {
     const fresh = live
-      ? popUnnotifiedAcceptedOutgoingLive(requests, userId!, email)
+      ? popUnnotifiedAcceptedOutgoingLive(requests, email)
       : popUnnotifiedAcceptedOutgoing(email).filter((r) => !notifiedRef.current.has(r.id));
 
     if (fresh.length === 0) return;

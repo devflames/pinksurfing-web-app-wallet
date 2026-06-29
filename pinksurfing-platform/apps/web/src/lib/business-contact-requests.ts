@@ -14,6 +14,8 @@ export type BusinessContactRequest = {
   paychatId: string;
   message: string;
   status: 'pending' | 'approved' | 'declined';
+  /** Live API: whether the current user sent or received this request */
+  viewerRole?: 'incoming' | 'outgoing';
   createdAt: string;
   acceptedAt?: string;
 };

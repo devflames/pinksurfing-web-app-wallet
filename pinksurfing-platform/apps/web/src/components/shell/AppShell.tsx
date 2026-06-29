@@ -459,13 +459,18 @@ export function AppShell() {
   }, [user?.email]);
 
   useEffect(() => {
-    if (isChatLive() && token) {
+    if (!isChatLive() || !token) {
+      setBusinessRequests(loadBusinessRequests(user?.email ?? 'guest'));
+      return;
+    }
+    const load = () => {
       void fetchBusinessRequests(token)
         .then(setBusinessRequests)
         .catch(() => setBusinessRequests([]));
-      return;
-    }
-    setBusinessRequests(loadBusinessRequests(user?.email ?? 'guest'));
+    };
+    load();
+    const timer = window.setInterval(load, 20_000);
+    return () => window.clearInterval(timer);
   }, [user?.email, token]);
 
   useEffect(() => {

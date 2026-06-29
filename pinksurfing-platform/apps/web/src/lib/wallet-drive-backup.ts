@@ -4,6 +4,20 @@ import { getWalletBase } from './api-client';
 
 const DRIVE_FILE = 'pinksurfing-wallet-backup.enc';
 
+function formatDriveApiError(message: string): string {
+  if (
+    message.includes('Google Drive API has not been used') ||
+    message.includes('drive.googleapis.com') ||
+    message.includes('accessNotConfigured')
+  ) {
+    return (
+      'Google Drive API is disabled for this Google Cloud project. ' +
+      'Enable “Google Drive API” in Google Cloud Console for the OAuth client project, then retry in a few minutes.'
+    );
+  }
+  return message;
+}
+
 type WalletOAuthStart = {
   status: string;
   data?: { url: string; sessionId: string };
@@ -120,7 +134,7 @@ export async function uploadEncryptedBackupToDrive(
 
   if (!uploadRes.ok) {
     const err = (await uploadRes.json().catch(() => ({}))) as { error?: { message?: string } };
-    throw new Error(err.error?.message || 'Failed to upload backup to Google Drive');
+    throw new Error(formatDriveApiError(err.error?.message || 'Failed to upload backup to Google Drive'));
   }
 }
 
@@ -135,7 +149,7 @@ export async function downloadEncryptedBackupFromDrive(
   });
   if (!fileRes.ok) {
     const err = (await fileRes.json().catch(() => ({}))) as { error?: { message?: string } };
-    throw new Error(err.error?.message || 'Could not download backup from Google Drive');
+    throw new Error(formatDriveApiError(err.error?.message || 'Could not download backup from Google Drive'));
   }
   return fileRes.text();
 }
