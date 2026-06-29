@@ -1,5 +1,6 @@
 import type { Contact } from '@pinksurfing/ui';
 import { DEMO_CONTACTS } from '@/lib/demo-data';
+import { isChatLive } from '@/lib/chat-api';
 
 export type SavedContact = {
   id: string;
@@ -78,6 +79,7 @@ export function savedWithoutActiveChat(
   email: string,
   activePersonalIds: Set<string>
 ): SavedContact[] {
+  if (isChatLive()) return [];
   const started = new Set(loadStartedPersonalIds(email));
   return SAVED_PERSONAL_CONTACTS.filter((c) => {
     if (c.hasActiveChat) return false;
@@ -101,6 +103,7 @@ export function savedContactToUi(c: SavedContact): Contact {
 }
 
 export function resolveSavedOrDemo(id: string): Contact | undefined {
+  if (isChatLive()) return undefined;
   const saved = SAVED_PERSONAL_CONTACTS.find((c) => c.id === id);
   if (saved) return savedContactToUi(saved);
   return DEMO_CONTACTS[id];

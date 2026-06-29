@@ -67,7 +67,13 @@ import { BuildTabTitle } from '@/components/shell/BuildTabTitle';
 import { useIsMobile } from '@/lib/use-is-mobile';
 import { useLiveChat } from '@/lib/use-live-chat';
 import { useContacts } from '@/lib/use-contacts';
-import { fetchPaychatRoomStatus, isChatLive } from '@/lib/chat-api';
+import {
+  addPersonalContactByEmail,
+  fetchContactList,
+  fetchDiscoverPeople,
+  fetchPaychatRoomStatus,
+  isChatLive,
+} from '@/lib/chat-api';
 import { usdToMojosEstimate } from '@/lib/wallet-api';
 import { publishStateEvent } from '@/lib/state-message-service';
 import { VAULT_STATE_LABELS } from '@/lib/state-message-types';
@@ -395,6 +401,7 @@ export function AppShell() {
   );
 
   const extraPersonalContacts = useMemo(() => {
+    if (isChatLive()) return [];
     void startedPersonalTick;
     return loadStartedPersonalIds(user?.email ?? 'guest')
       .map((id) => SAVED_PERSONAL_CONTACTS.find((c) => c.id === id))
@@ -896,6 +903,47 @@ export function AppShell() {
       setHomeMainOverlay(null);
     },
     []
+  );
+
+  const handleAddPersonalLive = useCallback(
+    async (addr: string, peerUserId?: string, name?: string) => {
+      if (!token) throw new Error('Sign in to add contacts');
+      await addPersonalContactByEmail(token, addr);
+      const list = await fetchContactList(token);
+      let contact =
+        peerUserId != null
+          ? list.find((c) => c.type === 'personal' && c.userId === peerUserId)
+          : undefined;
+      if (!contact) {
+        const discover = await fetchDiscoverPeople(token);
+        const row = discover?.find((d) => d.email?.toLowerCase() === addr.toLowerCase());
+        if (row) {
+          contact = list.find((c) => c.userId === row.userId);
+        }
+      }
+      await reloadContacts();
+      if (contact) {
+        handleStartPersonalChat(contact);
+        return;
+      }
+      const fallbackName = name ?? addr.split('@')[0];
+      if (peerUserId) {
+        handleStartPersonalChat({
+          id: `live-${peerUserId}`,
+          userId: peerUserId,
+          name: fallbackName,
+          initials: fallbackName.slice(0, 2).toUpperCase(),
+          color: '#FF7AD1',
+          bg: '#FF7AD120',
+          type: 'personal',
+          preview: 'Start a conversation',
+          time: '',
+        });
+        return;
+      }
+      throw new Error('Contact added — refresh and select them from your personal list.');
+    },
+    [token, reloadContacts, handleStartPersonalChat]
   );
 
   const openHomeOverlay = useCallback((overlay: HomeMainOverlay) => {
@@ -1416,12 +1464,16 @@ export function AppShell() {
               {homeMainOverlay === 'start-chat' && (
                 <StartChatOverlay
                   user={user}
+                  token={token}
+                  userId={userId}
                   activePersonalIds={activePersonalIds}
                   startedPersonalIds={loadStartedPersonalIds(user?.email ?? 'guest')}
                   displayName={displayName(user)}
+                  requests={businessRequests}
                   onClose={() => setHomeMainOverlay(null)}
                   onStartPersonalChat={handleStartPersonalChat}
                   onRequestsChange={setBusinessRequests}
+                  onAddPersonalLive={handleAddPersonalLive}
                 />
               )}
               {!homeMainOverlay && active?.isGroup && active.groupId && groupEditMode && (

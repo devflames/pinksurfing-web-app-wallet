@@ -1,3 +1,4 @@
+import type { Contact } from '@pinksurfing/ui';
 import type { ProfileStatusCategory } from '@/lib/profile-status-options';
 import type { ColdContactLikelihood } from '@/lib/cold-contact-likelihood';
 import { defaultIndustryFilters, matchesIndustryFilter } from '@/lib/industry-taxonomy';
@@ -25,6 +26,7 @@ export type DiscoverPerson = {
   verified: boolean;
   contactId?: string;
   userId?: string;
+  email?: string;
   aboutMe?: string;
   dealsInterestedIn?: string[];
   coldContactLikelihood: ColdContactLikelihood;
@@ -454,6 +456,7 @@ export function liveAccountToDiscoverPerson(
   return {
     id: `live-${row.userId}`,
     userId: row.userId,
+    email: row.email,
     contactId: `live-${row.userId}`,
     name,
     businessName: name,
@@ -485,4 +488,33 @@ export function saveFindZip(email: string, zip: string): void {
   if (typeof window !== 'undefined') {
     localStorage.setItem(`${FIND_ZIP_KEY}:${email || 'guest'}`, zip.replace(/\D/g, '').slice(0, 5));
   }
+}
+
+function initialsFromName(name: string): string {
+  return (
+    name
+      .split(/\s+/)
+      .map((w) => w[0])
+      .join('')
+      .slice(0, 2)
+      .toUpperCase() || '?'
+  );
+}
+
+export function discoverPersonToPersonalContact(person: {
+  userId?: string;
+  name: string;
+}): Contact {
+  const userId = person.userId ?? '';
+  return {
+    id: userId ? `live-${userId}` : 'live-unknown',
+    userId: userId || undefined,
+    name: person.name,
+    initials: initialsFromName(person.name),
+    color: '#FF7AD1',
+    bg: '#FF7AD120',
+    type: 'personal',
+    preview: 'Start a conversation',
+    time: '',
+  };
 }

@@ -1,11 +1,16 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   hasPendingRequest,
   sendBusinessRequest,
   type BusinessContactRequest,
 } from '@/lib/business-contact-requests';
+import {
+  fetchBusinessRequests,
+  hasPendingRequestLive,
+  sendBusinessRequestApi,
+} from '@/lib/business-contact-requests-api';
 import {
   filterDirectoryByFilters,
   directoryStates,
@@ -13,9 +18,12 @@ import {
 } from '@/lib/ps-business-directory';
 import {
   defaultDiscoverFilters,
+  filterDiscoverPeople,
+  liveAccountToDiscoverPerson,
   loadFindZip,
   saveFindZip,
   type DiscoverFilters,
+  type DiscoverPerson,
 } from '@/lib/discover-people';
 import { CollapsibleFiltersPanel } from '@/components/contacts/CollapsibleFiltersPanel';
 import {
@@ -28,6 +36,7 @@ import {
   savedContactToUi,
   savedWithoutActiveChat,
 } from '@/lib/saved-contacts';
+import { fetchDiscoverPeople, isChatLive } from '@/lib/chat-api';
 import { isContactJoined, paychatInviteCodeForUser } from '@/lib/qr-invite';
 import type { SessionUser } from '@/lib/types/user';
 import type { Contact } from '@pinksurfing/ui';
@@ -36,33 +45,81 @@ type Tab = 'saved' | 'phone' | 'directory';
 
 type Props = {
   user: SessionUser | null;
+  token?: string | null;
+  userId?: string | null;
   activePersonalIds: Set<string>;
   startedPersonalIds: string[];
   displayName: string;
+  requests: BusinessContactRequest[];
   onClose: () => void;
   onStartPersonalChat: (contact: Contact) => void;
   onRequestsChange: (list: BusinessContactRequest[]) => void;
+  onAddPersonalLive?: (email: string, userId?: string, name?: string) => Promise<void>;
 };
+
+function peerUserIdFromPerson(p: DiscoverPerson): string | undefined {
+  if (p.userId) return p.userId;
+  if (p.contactId?.startsWith('live-')) return p.contactId.slice(5);
+  return undefined;
+}
 
 export function StartChatOverlay({
   user,
+  token,
+  userId,
   activePersonalIds,
   startedPersonalIds,
   displayName: inviterName,
+  requests,
   onClose,
   onStartPersonalChat,
   onRequestsChange,
+  onAddPersonalLive,
 }: Props) {
   const [tab, setTab] = useState<Tab>('saved');
   const [query, setQuery] = useState('');
   const email = user?.email ?? 'guest';
+  const live = isChatLive() && !!token && !!userId;
   const [filters, setFilters] = useState<DiscoverFilters>(() =>
     defaultDiscoverFilters(loadFindZip(email))
   );
   const [sentId, setSentId] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  const [livePeople, setLivePeople] = useState<DiscoverPerson[]>([]);
+  const [liveLoading, setLiveLoading] = useState(false);
+  const [liveError, setLiveError] = useState<string | null>(null);
+  const [addingId, setAddingId] = useState<string | null>(null);
+  const [emailToAdd, setEmailToAdd] = useState('');
 
   const paychatId = paychatInviteCodeForUser(user);
+
+  useEffect(() => {
+    if (!live || !token) {
+      setLivePeople([]);
+      setLiveError(null);
+      return;
+    }
+    let cancelled = false;
+    setLiveLoading(true);
+    setLiveError(null);
+    fetchDiscoverPeople(token)
+      .then((rows) => {
+        if (cancelled) return;
+        setLivePeople((rows ?? []).map((row, i) => liveAccountToDiscoverPerson(row, i)));
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setLiveError(e instanceof Error ? e.message : 'Could not load people');
+          setLivePeople([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLiveLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [live, token]);
 
   const saved = useMemo(() => {
     const list = savedWithoutActiveChat(email, activePersonalIds);
@@ -71,11 +128,45 @@ export function StartChatOverlay({
     return list.filter((c) => c.name.toLowerCase().includes(q));
   }, [email, activePersonalIds, query, startedPersonalIds]);
 
-  const phone = useMemo(() => filterPhoneBook(query), [query]);
+  const livePersonalCandidates = useMemo(() => {
+    if (!live) return [];
+    let list = livePeople.filter((p) => {
+      const uid = peerUserIdFromPerson(p);
+      if (!uid) return false;
+      return !activePersonalIds.has(`live-${uid}`);
+    });
+    const q = query.trim().toLowerCase();
+    if (q) {
+      list = list.filter(
+        (p) =>
+          p.name.toLowerCase().includes(q) ||
+          (p.email?.toLowerCase().includes(q) ?? false) ||
+          p.businessName.toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [live, livePeople, activePersonalIds, query]);
+
+  const liveDirectory = useMemo(() => {
+    if (!live) return [];
+    let list = filterDiscoverPeople(livePeople, filters);
+    const q = query.trim().toLowerCase();
+    if (q) {
+      list = list.filter(
+        (p) =>
+          p.name.toLowerCase().includes(q) ||
+          p.businessName.toLowerCase().includes(q) ||
+          (p.email?.toLowerCase().includes(q) ?? false)
+      );
+    }
+    return list;
+  }, [live, livePeople, filters, query]);
+
+  const phone = useMemo(() => (live ? [] : filterPhoneBook(query)), [live, query]);
 
   const directory = useMemo(
-    () => filterDirectoryByFilters(query, filters),
-    [query, filters]
+    () => (live ? [] : filterDirectoryByFilters(query, filters)),
+    [live, query, filters]
   );
 
   const patchFilters = (patch: Partial<DiscoverFilters>) => {
@@ -86,13 +177,67 @@ export function StartChatOverlay({
     });
   };
 
-  const handleRequest = (biz: DirectoryBusiness) => {
+  const handleRequest = async (biz: DirectoryBusiness) => {
     if (biz.contactId && isContactJoined('business', biz.contactId)) return;
     if (hasPendingRequest(email, biz.id)) return;
     const next = sendBusinessRequest(email, biz, inviterName, paychatId);
     onRequestsChange(next);
     setSentId(biz.id);
     setTimeout(() => setSentId(null), 2500);
+  };
+
+  const handleLiveBusinessRequest = async (person: DiscoverPerson) => {
+    const toUserId = peerUserIdFromPerson(person);
+    if (!token || !toUserId) return;
+    if (person.contactId && isContactJoined('business', person.contactId)) return;
+    if (hasPendingRequestLive(requests, toUserId)) return;
+    try {
+      await sendBusinessRequestApi(token, {
+        toUserId,
+        toBusinessId: person.id,
+        toBusinessName: person.businessName,
+        toContactName: person.name,
+        industry: person.industry,
+        industryCategory: person.industryCategory,
+        paychatId: person.paychatId,
+        fromName: inviterName,
+        message: `Request to connect with ${person.businessName} via PinkSurfing.`,
+      });
+      const next = await fetchBusinessRequests(token);
+      onRequestsChange(next);
+      setSentId(person.id);
+      setTimeout(() => setSentId(null), 2500);
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : 'Could not send request');
+    }
+  };
+
+  const startPersonalLive = async (person: DiscoverPerson) => {
+    if (!person.email || !onAddPersonalLive) return;
+    setAddingId(person.id);
+    try {
+      await onAddPersonalLive(person.email, peerUserIdFromPerson(person), person.name);
+      onClose();
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : 'Could not add contact');
+    } finally {
+      setAddingId(null);
+    }
+  };
+
+  const startPersonalByEmail = async () => {
+    const addr = emailToAdd.trim().toLowerCase();
+    if (!addr || !onAddPersonalLive) return;
+    setAddingId('email');
+    try {
+      await onAddPersonalLive(addr);
+      setEmailToAdd('');
+      onClose();
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : 'Could not add contact');
+    } finally {
+      setAddingId(null);
+    }
   };
 
   const copyInvite = async (text: string, key: string) => {
@@ -105,13 +250,26 @@ export function StartChatOverlay({
     }
   };
 
+  const tabLabels: [Tab, string][] = live
+    ? [
+        ['saved', 'On PinkSurfing'],
+        ['directory', 'Business requests'],
+      ]
+    : [
+        ['saved', 'Your contacts'],
+        ['phone', 'Phone book'],
+        ['directory', 'PS businesses'],
+      ];
+
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-[var(--ps-bg)]">
       <div className="flex shrink-0 items-center gap-2 border-b border-[var(--ps-brd)] bg-[var(--ps-surf)] px-4 py-3">
         <div className="min-w-0 flex-1">
           <div className="text-sm font-semibold text-[var(--ps-white)]">Start a chat</div>
           <div className="text-[9px] text-[var(--ps-muted)]">
-            Contacts, phone book, or PinkSurfing businesses
+            {live
+              ? 'Add PinkSurfing members to your personal chats'
+              : 'Contacts, phone book, or PinkSurfing businesses'}
           </div>
         </div>
         <button
@@ -127,17 +285,11 @@ export function StartChatOverlay({
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search name, phone, or business…"
+          placeholder={live ? 'Search name or email…' : 'Search name, phone, or business…'}
           className="w-full rounded-lg border border-[var(--ps-brd)] bg-[var(--ps-card)] px-3 py-2 text-[11px] text-[var(--ps-white)] outline-none placeholder:text-[var(--ps-dim)]"
         />
         <div className="mt-2 flex gap-1">
-          {(
-            [
-              ['saved', 'Your contacts'],
-              ['phone', 'Phone book'],
-              ['directory', 'PS businesses'],
-            ] as const
-          ).map(([id, label]) => (
+          {tabLabels.map(([id, label]) => (
             <button
               key={id}
               type="button"
@@ -157,34 +309,98 @@ export function StartChatOverlay({
       <div className="ps-scroll flex-1 overflow-y-auto p-4">
         {tab === 'saved' && (
           <section>
-            <p className="mb-3 text-[9px] text-[var(--ps-dim)]">
-              People in your contacts without an active chat on PinkSurfing.
-            </p>
-            {saved.length === 0 ? (
-              <p className="text-[10px] text-[var(--ps-dim)]">No saved contacts without a chat.</p>
-            ) : (
-              <div className="space-y-1">
-                {saved.map((c) => (
+            {live ? (
+              <>
+                <p className="mb-3 text-[9px] text-[var(--ps-dim)]">
+                  People on PinkSurfing who are not in your personal list yet.
+                </p>
+                <form
+                  className="mb-3 flex gap-2"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void startPersonalByEmail();
+                  }}
+                >
+                  <input
+                    type="email"
+                    value={emailToAdd}
+                    onChange={(e) => setEmailToAdd(e.target.value)}
+                    placeholder="Add by email…"
+                    className="min-w-0 flex-1 rounded-lg border border-[var(--ps-brd)] bg-[var(--ps-card)] px-3 py-2 text-[11px] text-[var(--ps-white)] outline-none placeholder:text-[var(--ps-dim)]"
+                  />
                   <button
-                    key={c.id}
-                    type="button"
-                    onClick={() => {
-                      markPersonalChatStarted(email, c.id);
-                      onStartPersonalChat(savedContactToUi(c));
-                      onClose();
-                    }}
-                    className="flex w-full items-center justify-between rounded-xl border border-[var(--ps-brd)] bg-[var(--ps-card)] px-3 py-2.5 text-left hover:border-[var(--ps-cyan)]/40"
+                    type="submit"
+                    disabled={!emailToAdd.trim() || addingId === 'email'}
+                    className="shrink-0 rounded-lg border border-[var(--ps-cyan)]/50 px-3 py-2 text-[9px] text-[var(--ps-cyan)] disabled:opacity-50"
                   >
-                    <span className="text-[11px] text-[var(--ps-white)]">{c.name}</span>
-                    <span className="text-[9px] text-[var(--ps-cyan)]">Start chat</span>
+                    {addingId === 'email' ? 'Adding…' : 'Add'}
                   </button>
-                ))}
-              </div>
+                </form>
+                {liveLoading ? (
+                  <p className="text-[10px] text-[var(--ps-dim)]">Loading people…</p>
+                ) : liveError ? (
+                  <p className="text-[10px] text-[var(--ps-amber)]">{liveError}</p>
+                ) : livePersonalCandidates.length === 0 ? (
+                  <p className="text-[10px] text-[var(--ps-dim)]">
+                    No other PinkSurfing users to add. Use the email field above if you know their
+                    address.
+                  </p>
+                ) : (
+                  <div className="space-y-1">
+                    {livePersonalCandidates.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        disabled={addingId === p.id}
+                        onClick={() => void startPersonalLive(p)}
+                        className="flex w-full items-center justify-between rounded-xl border border-[var(--ps-brd)] bg-[var(--ps-card)] px-3 py-2.5 text-left hover:border-[var(--ps-cyan)]/40 disabled:opacity-60"
+                      >
+                        <span>
+                          <span className="block text-[11px] text-[var(--ps-white)]">{p.name}</span>
+                          {p.email && (
+                            <span className="text-[9px] text-[var(--ps-dim)]">{p.email}</span>
+                          )}
+                        </span>
+                        <span className="text-[9px] text-[var(--ps-cyan)]">
+                          {addingId === p.id ? 'Adding…' : 'Start chat'}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <p className="mb-3 text-[9px] text-[var(--ps-dim)]">
+                  People in your contacts without an active chat on PinkSurfing.
+                </p>
+                {saved.length === 0 ? (
+                  <p className="text-[10px] text-[var(--ps-dim)]">No saved contacts without a chat.</p>
+                ) : (
+                  <div className="space-y-1">
+                    {saved.map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => {
+                          markPersonalChatStarted(email, c.id);
+                          onStartPersonalChat(savedContactToUi(c));
+                          onClose();
+                        }}
+                        className="flex w-full items-center justify-between rounded-xl border border-[var(--ps-brd)] bg-[var(--ps-card)] px-3 py-2.5 text-left hover:border-[var(--ps-cyan)]/40"
+                      >
+                        <span className="text-[11px] text-[var(--ps-white)]">{c.name}</span>
+                        <span className="text-[9px] text-[var(--ps-cyan)]">Start chat</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
             )}
           </section>
         )}
 
-        {tab === 'phone' && (
+        {tab === 'phone' && !live && (
           <section>
             <p className="mb-3 text-[9px] text-[var(--ps-dim)]">
               From your phone book — invite those not on PinkSurfing with your link.
@@ -234,62 +450,126 @@ export function StartChatOverlay({
 
         {tab === 'directory' && (
           <section>
-            <CollapsibleFiltersPanel
-              filters={filters}
-              onChange={patchFilters}
-              states={directoryStates()}
-              meta={
-                <span className="text-[9px] text-[var(--ps-dim)]">
-                  {directory.length} businesses
-                </span>
-              }
-              hint="Search businesses — request required without their business card"
-            />
-            <div className="mt-2 space-y-2">
-              {directory.map((biz) => {
-                const joined = biz.contactId ? isContactJoined('business', biz.contactId) : false;
-                const pending = hasPendingRequest(email, biz.id);
-                return (
-                  <div
-                    key={biz.id}
-                    className="rounded-xl border border-[var(--ps-brd)] bg-[var(--ps-card)] px-3 py-2.5"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <div className="text-[11px] font-medium text-[var(--ps-white)]">
-                          {biz.businessName}
-                        </div>
-                        <div className="text-[9px] text-[var(--ps-dim)]">
-                          {biz.contactName} · {biz.industry} · {biz.location}
-                        </div>
-                        <div className="mt-1 font-mono text-[8px] text-[var(--ps-cyan)]">
-                          PayChat: {biz.paychatId}
+            {live ? (
+              <>
+                <CollapsibleFiltersPanel
+                  filters={filters}
+                  onChange={patchFilters}
+                  states={directoryStates()}
+                  meta={
+                    <span className="text-[9px] text-[var(--ps-dim)]">
+                      {liveDirectory.length} people
+                    </span>
+                  }
+                  hint="Send a business contact request — they approve before you can chat"
+                />
+                <div className="mt-2 space-y-2">
+                  {liveDirectory.map((person) => {
+                    const toUserId = peerUserIdFromPerson(person);
+                    const joined = person.contactId
+                      ? isContactJoined('business', person.contactId)
+                      : false;
+                    const pending =
+                      (toUserId && hasPendingRequestLive(requests, toUserId)) ||
+                      sentId === person.id;
+                    return (
+                      <div
+                        key={person.id}
+                        className="rounded-xl border border-[var(--ps-brd)] bg-[var(--ps-card)] px-3 py-2.5"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="text-[11px] font-medium text-[var(--ps-white)]">
+                              {person.businessName}
+                            </div>
+                            <div className="text-[9px] text-[var(--ps-dim)]">
+                              {person.name} · {person.industry} · {person.location}
+                            </div>
+                            <div className="mt-1 font-mono text-[8px] text-[var(--ps-cyan)]">
+                              PayChat: {person.paychatId}
+                            </div>
+                          </div>
+                          {joined ? (
+                            <span className="text-[8px] text-[var(--ps-green,#5DCAA5)]">
+                              Connected
+                            </span>
+                          ) : pending ? (
+                            <span className="text-[8px] text-[var(--ps-amber)]">Request sent</span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => void handleLiveBusinessRequest(person)}
+                              className="shrink-0 rounded-lg border border-[var(--ps-pink)]/50 px-2 py-1 text-[9px] text-[var(--ps-pink)]"
+                            >
+                              Request
+                            </button>
+                          )}
                         </div>
                       </div>
-                      {joined ? (
-                        <span className="text-[8px] text-[var(--ps-green,#5DCAA5)]">Connected</span>
-                      ) : pending || sentId === biz.id ? (
-                        <span className="text-[8px] text-[var(--ps-amber)]">Request sent</span>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => handleRequest(biz)}
-                          className="shrink-0 rounded-lg border border-[var(--ps-pink)]/50 px-2 py-1 text-[9px] text-[var(--ps-pink)]"
-                        >
-                          Request
-                        </button>
-                      )}
-                    </div>
-                    {!joined && (
-                      <p className="mt-1.5 text-[8px] text-[var(--ps-dim)]">
-                        They&apos;ll be prompted to reach you on PayChat first ({paychatId}) before
-                        approving.
-                      </p>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+                    );
+                  })}
+                </div>
+              </>
+            ) : (
+              <>
+                <CollapsibleFiltersPanel
+                  filters={filters}
+                  onChange={patchFilters}
+                  states={directoryStates()}
+                  meta={
+                    <span className="text-[9px] text-[var(--ps-dim)]">
+                      {directory.length} businesses
+                    </span>
+                  }
+                  hint="Search businesses — request required without their business card"
+                />
+                <div className="mt-2 space-y-2">
+                  {directory.map((biz) => {
+                    const joined = biz.contactId ? isContactJoined('business', biz.contactId) : false;
+                    const pending = hasPendingRequest(email, biz.id);
+                    return (
+                      <div
+                        key={biz.id}
+                        className="rounded-xl border border-[var(--ps-brd)] bg-[var(--ps-card)] px-3 py-2.5"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="text-[11px] font-medium text-[var(--ps-white)]">
+                              {biz.businessName}
+                            </div>
+                            <div className="text-[9px] text-[var(--ps-dim)]">
+                              {biz.contactName} · {biz.industry} · {biz.location}
+                            </div>
+                            <div className="mt-1 font-mono text-[8px] text-[var(--ps-cyan)]">
+                              PayChat: {biz.paychatId}
+                            </div>
+                          </div>
+                          {joined ? (
+                            <span className="text-[8px] text-[var(--ps-green,#5DCAA5)]">Connected</span>
+                          ) : pending || sentId === biz.id ? (
+                            <span className="text-[8px] text-[var(--ps-amber)]">Request sent</span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => void handleRequest(biz)}
+                              className="shrink-0 rounded-lg border border-[var(--ps-pink)]/50 px-2 py-1 text-[9px] text-[var(--ps-pink)]"
+                            >
+                              Request
+                            </button>
+                          )}
+                        </div>
+                        {!joined && (
+                          <p className="mt-1.5 text-[8px] text-[var(--ps-dim)]">
+                            They&apos;ll be prompted to reach you on PayChat first ({paychatId})
+                            before approving.
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
           </section>
         )}
       </div>

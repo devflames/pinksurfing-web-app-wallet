@@ -10,9 +10,11 @@ function formatDriveApiError(message: string): string {
     message.includes('drive.googleapis.com') ||
     message.includes('accessNotConfigured')
   ) {
+    const projectHint = message.match(/project (\d+)/)?.[1];
     return (
-      'Google Drive API is disabled for this Google Cloud project. ' +
-      'Enable “Google Drive API” in Google Cloud Console for the OAuth client project, then retry in a few minutes.'
+      'Google Drive API is disabled for the Google Cloud project tied to your wallet OAuth client' +
+      (projectHint ? ` (project ${projectHint})` : '') +
+      '. Open Google Cloud Console → APIs & Services → enable “Google Drive API” on that same project—not a different one—then wait a few minutes and retry.'
     );
   }
   return message;

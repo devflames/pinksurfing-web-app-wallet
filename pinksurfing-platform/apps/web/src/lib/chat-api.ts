@@ -509,6 +509,21 @@ export async function addBusinessContactByEmail(token: string, email: string): P
   }
 }
 
+export async function addPersonalContactByEmail(token: string, email: string): Promise<void> {
+  const res = await fetch(`${CHAT_BASE}/users/addContact`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ email, type: 'personal' }),
+  });
+  const body = (await res.json().catch(() => ({}))) as SimpleApiResponse;
+  if (!res.ok || body.status !== 'success') {
+    throw new Error(body.message ?? 'Could not add personal contact');
+  }
+}
+
 type DiscoverPeopleResponse = {
   status: string;
   data?: Array<{
