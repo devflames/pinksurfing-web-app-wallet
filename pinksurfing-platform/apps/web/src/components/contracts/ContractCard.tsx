@@ -1,6 +1,8 @@
 'use client';
 
 import type { BusinessContract, ContractActionType } from '@/lib/types/contract';
+import { ExecutionTimeline } from '@/components/contracts/ExecutionTimeline';
+import { buildExecutionTimeline } from '@/lib/contract-timeline';
 import { STATE_COLORS, STATE_LABELS, actionsForState, formatDate, formatMoney } from '@/lib/contract-utils';
 import { contractId } from '@/lib/types/contract';
 
@@ -9,15 +11,20 @@ type Props = {
   onAction?: (action: ContractActionType) => void;
   acting?: boolean;
   compact?: boolean;
+  showTimeline?: boolean;
   onOpenSwap?: () => void;
 };
 
-export function ContractCard({ contract, onAction, acting, compact, onOpenSwap }: Props) {
+export function ContractCard({ contract, onAction, acting, compact, showTimeline, onOpenSwap }: Props) {
   const colors = STATE_COLORS[contract.state] ?? STATE_COLORS.DRAFT;
   const actions = onAction ? actionsForState(contract.state, contract.settlementMode) : [];
+  const timeline = buildExecutionTimeline(contract);
 
   return (
-    <div className="my-1 overflow-hidden rounded-xl border border-[var(--ps-brd)] bg-[var(--ps-card)]">
+    <div
+      className="my-1 overflow-hidden rounded-xl border border-[var(--ps-brd)] bg-[var(--ps-card)]"
+      style={{ borderLeftWidth: 3, borderLeftColor: colors.text }}
+    >
       <div
         className="flex items-center gap-1.5 border-b px-2.5 py-1.5"
         style={{
@@ -59,6 +66,14 @@ export function ContractCard({ contract, onAction, acting, compact, onOpenSwap }
             </span>
           )}
         </div>
+        {showTimeline && !compact && (
+          <div className="mt-3 border-t border-[var(--ps-brd)] pt-2">
+            <div className="mb-1.5 text-[8px] font-semibold uppercase tracking-wide text-[var(--ps-dim)]">
+              Execution timeline
+            </div>
+            <ExecutionTimeline timeline={timeline} />
+          </div>
+        )}
         {actions.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-1">
             {actions.map(({ action, label }) => (

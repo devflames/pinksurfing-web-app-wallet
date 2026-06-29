@@ -10,8 +10,9 @@ import { ContactDetailPanel } from '@/components/business/ContactDetailPanel';
 import { ExecBar } from '@/components/business/ExecBar';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { MessageThread } from '@/components/chat/MessageThread';
-import { ContractCard } from '@/components/contracts/ContractCard';
+import { ContractThreadItem } from '@/components/contracts/ContractThreadItem';
 import { CreateContractModal } from '@/components/contracts/CreateContractModal';
+import { pickActiveContract } from '@/lib/contract-timeline';
 import { PayChatGate } from '@/components/paychat/PayChatGate';
 import { PayChatReceiveCard } from '@/components/paychat/PayChatReceiveCard';
 import { PayChatDialOverlay } from '@/components/paychat/PayChatDialOverlay';
@@ -329,6 +330,7 @@ export function AppShell() {
   const [contractsLoading, setContractsLoading] = useState(false);
   const [contractsError, setContractsError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [expandedContractId, setExpandedContractId] = useState<string | null>(null);
   const [actingId, setActingId] = useState<string | null>(null);
   const [unlockedPaychat, setUnlockedPaychat] = useState<Record<string, boolean>>({ c7: true });
   const [squareContract, setSquareContract] = useState<BusinessContract | null>(null);
@@ -544,7 +546,7 @@ export function AppShell() {
   const peerUserId = active ? resolvePeerUserId(active) : null;
   const bizConv =
     active?.type === 'business' ? resolveBusinessConversation(active, userId) : null;
-  const primaryContract = contracts[0] ?? null;
+  const primaryContract = useMemo(() => pickActiveContract(contracts), [contracts]);
 
   const businessAvatarRings = useMemo(() => {
     if (effectiveTab !== 'business') return {} as Record<string, BusinessAvatarRing>;
@@ -1147,6 +1149,9 @@ export function AppShell() {
   };
 
   const scrollToContracts = () => {
+    if (primaryContract) {
+      setExpandedContractId(contractId(primaryContract));
+    }
     contractAnchorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
 
@@ -1637,15 +1642,24 @@ export function AppShell() {
                 )}
                 <div ref={contractAnchorRef}>
                   {active.type === 'business' && !active.isGroup &&
-                    contracts.map((c) => (
-                      <ContractCard
-                        key={contractId(c)}
-                        contract={c}
-                        acting={actingId === contractId(c)}
-                        onAction={(action) => handleAction(c, action)}
-                        onOpenSwap={() => setBusinessView('swap')}
-                      />
-                    ))}
+                    contracts.map((c) => {
+                      const id = contractId(c);
+                      return (
+                        <ContractThreadItem
+                          key={id}
+                          contract={c}
+                          expanded={expandedContractId === id}
+                          acting={actingId === id}
+                          onToggle={(toggleId) =>
+                            setExpandedContractId((prev) =>
+                              prev === toggleId ? null : toggleId
+                            )
+                          }
+                          onAction={(action) => handleAction(c, action)}
+                          onOpenSwap={() => setBusinessView('swap')}
+                        />
+                      );
+                    })}
                 </div>
                 {active.type === 'business' && !active.isGroup && !contractsLoading && contracts.length === 0 && (
                   <p className="text-center text-[10px] text-[var(--ps-dim)]">
@@ -1800,6 +1814,11 @@ export function AppShell() {
           <ContactDetailPanel
             contact={active}
             contracts={contracts}
+            activeContractId={expandedContractId}
+            onSelectContract={(id) => {
+              setExpandedContractId(id);
+              contractAnchorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }}
             paychatLocked={
               active.type === 'paychat' &&
               paychatDir(active) === 'outgoing' &&
