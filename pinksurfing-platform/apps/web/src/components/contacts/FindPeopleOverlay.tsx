@@ -13,6 +13,7 @@ import {
 } from '@/lib/business-contact-requests';
 import {
   approveBusinessRequestApi,
+  cancelBusinessRequestApi,
   declineBusinessRequestApi,
   fetchBusinessRequests,
   hasPendingRequestLive,
@@ -141,13 +142,14 @@ export function FindPeopleOverlay({
   const catalog = live ? livePeople : discoverCatalog();
 
   const incoming = useMemo(
-    () => (live ? incomingRequestsLive(requests) : incomingRequests(email)),
-    [email, live, requests]
+    () => (live ? incomingRequestsLive(requests, userId) : incomingRequests(email)),
+    [email, live, requests, userId]
   );
   const outgoing = useMemo(
-    () => (live ? outgoingRequestsLive(requests) : outgoingRequests(email)),
-    [email, live, requests]
+    () => (live ? outgoingRequestsLive(requests, userId) : outgoingRequests(email)),
+    [email, live, requests, userId]
   );
+  const pendingOutgoing = outgoing.filter((r) => r.status === 'pending');
 
   useEffect(() => {
     if (!live || !token) return;
@@ -156,7 +158,11 @@ export function FindPeopleOverlay({
 
   useEffect(() => {
     if (live && incoming.length > 0) setTab('requests');
-  }, [live, incoming.length]);
+    if (live && incoming.length === 0 && pendingOutgoing.length > 0) {
+      setTab('requests');
+      setOutgoingOpen(true);
+    }
+  }, [live, incoming.length, pendingOutgoing.length]);
 
   const filtered = useMemo(
     () => filterDiscoverPeople(catalog, filters),
@@ -225,11 +231,15 @@ export function FindPeopleOverlay({
 
   const handleApprove = async (id: string) => {
     if (live && token) {
-      await approveBusinessRequestApi(token, id);
-      const next = await fetchBusinessRequests(token);
-      onRequestsChange(next);
-      onRefresh();
-      onContactsRefresh?.();
+      try {
+        await approveBusinessRequestApi(token, id);
+        const next = await fetchBusinessRequests(token);
+        onRequestsChange(next);
+        onRefresh();
+        onContactsRefresh?.();
+      } catch (e) {
+        window.alert(e instanceof Error ? e.message : 'Could not approve request');
+      }
       return;
     }
     const next = approveBusinessRequest(email, id);
@@ -238,13 +248,30 @@ export function FindPeopleOverlay({
 
   const handleDecline = async (id: string) => {
     if (live && token) {
-      await declineBusinessRequestApi(token, id);
-      const next = await fetchBusinessRequests(token);
-      onRequestsChange(next);
+      try {
+        await declineBusinessRequestApi(token, id);
+        const next = await fetchBusinessRequests(token);
+        onRequestsChange(next);
+      } catch (e) {
+        window.alert(e instanceof Error ? e.message : 'Could not decline request');
+      }
       return;
     }
     const next = declineBusinessRequest(email, id);
     onRequestsChange(next);
+  };
+
+  const handleCancel = async (id: string) => {
+    if (live && token) {
+      try {
+        await cancelBusinessRequestApi(token, id);
+        const next = await fetchBusinessRequests(token);
+        onRequestsChange(next);
+      } catch (e) {
+        window.alert(e instanceof Error ? e.message : 'Could not cancel request');
+      }
+      return;
+    }
   };
 
   const handleVisit = (person: DiscoverPerson) => {
@@ -318,7 +345,8 @@ export function FindPeopleOverlay({
                 live && selected
                   ? hasPendingRequestLive(
                       requests,
-                      peerUserIdFromPerson(selected) ?? selected.id
+                      peerUserIdFromPerson(selected) ?? selected.id,
+                      userId
                     )
                   : hasPendingRequest(email, selected.id)
               }
@@ -384,6 +412,14 @@ export function FindPeopleOverlay({
           </div>
 
           <div className="ps-scroll flex-1 overflow-y-auto p-3">
+            {live && pendingOutgoing.length > 0 && incoming.length === 0 && (
+              <div className="mb-3 rounded-xl border border-[var(--ps-amber)]/30 bg-[var(--ps-amber)]/10 px-3 py-2.5 text-[10px] text-[var(--ps-muted)]">
+                You sent {pendingOutgoing.length} request{pendingOutgoing.length === 1 ? '' : 's'} —{' '}
+                <strong className="text-[var(--ps-white)]">only the other person can Approve</strong>.
+                They will see it under Incoming requests when they sign in.
+              </div>
+            )}
+
             <section className="mb-4">
               <div className="mb-2 flex items-center justify-between">
                 <div className="text-[9px] font-semibold uppercase tracking-wide text-[var(--ps-pink-soft)]">
@@ -442,7 +478,14 @@ export function FindPeopleOverlay({
                     </p>
                   ) : (
                     outgoing.map((r) => (
-                      <RequestCard key={r.id} request={r} variant="outgoing" />
+                      <RequestCard
+                        key={r.id}
+                        request={r}
+                        variant="outgoing"
+                        onCancel={
+                          live && r.status === 'pending' ? () => handleCancel(r.id) : undefined
+                        }
+                      />
                     ))
                   )}
                 </div>
@@ -461,12 +504,14 @@ function RequestCard({
   sameIndustry = false,
   onApprove,
   onDecline,
+  onCancel,
 }: {
   request: BusinessContactRequest;
   variant: 'incoming' | 'outgoing';
   sameIndustry?: boolean;
   onApprove?: () => void;
   onDecline?: () => void;
+  onCancel?: () => void;
 }) {
   const statusLabel =
     request.status === 'approved'
@@ -515,10 +560,18 @@ function RequestCard({
       <div className="mt-2 rounded-lg bg-[var(--ps-surf)] px-2 py-1.5">
         <div className="text-[8px] text-[var(--ps-dim)]">PayChat ID</div>
         <div className="font-mono text-[10px] text-[var(--ps-cyan)]">{request.paychatId}</div>
-        <p className="mt-0.5 text-[8px] text-[var(--ps-dim)]">
-          Connect on PayChat before approving a business contact.
-        </p>
+        {variant === 'incoming' && request.status === 'pending' && (
+          <p className="mt-0.5 text-[8px] text-[var(--ps-dim)]">
+            Optional: connect on PayChat first, then approve to add them as a business contact.
+          </p>
+        )}
       </div>
+
+      {variant === 'outgoing' && request.status === 'pending' && (
+        <p className="mt-2 rounded-lg bg-[var(--ps-amber)]/10 px-2 py-1.5 text-[9px] text-[var(--ps-amber)]">
+          Waiting for {request.toBusinessName} to approve — check back after they accept.
+        </p>
+      )}
 
       {variant === 'outgoing' && request.status === 'approved' && (
         <p className="mt-2 rounded-lg bg-[var(--ps-green,#5DCAA5)]/10 px-2 py-1.5 text-[9px] text-[var(--ps-green,#5DCAA5)]">
@@ -544,6 +597,16 @@ function RequestCard({
             Decline
           </button>
         </div>
+      )}
+
+      {variant === 'outgoing' && request.status === 'pending' && onCancel && (
+        <button
+          type="button"
+          onClick={onCancel}
+          className="mt-2 w-full rounded-lg border border-[var(--ps-brd)] py-1.5 text-[10px] text-[var(--ps-muted)] hover:text-[var(--ps-white)]"
+        >
+          Cancel request
+        </button>
       )}
     </div>
   );

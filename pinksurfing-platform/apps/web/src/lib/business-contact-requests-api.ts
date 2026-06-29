@@ -76,27 +76,64 @@ export async function declineBusinessRequestApi(
   return res.data;
 }
 
-export function incomingRequestsLive(
-  requests: BusinessContactRequest[]
+export async function cancelBusinessRequestApi(
+  token: string,
+  requestId: string
+): Promise<BusinessContactRequest> {
+  const res = await postJson<OneResponse>(token, '/cancel', { requestId });
+  if (!res.data) throw new Error(res.message || 'Cancel failed');
+  return res.data;
+}
+
+export function inferViewerRole(
+  request: BusinessContactRequest,
+  userId: string | null | undefined
+): 'incoming' | 'outgoing' | undefined {
+  if (request.viewerRole) return request.viewerRole;
+  if (!userId) return undefined;
+  const uid = String(userId);
+  if (request.fromUserId && String(request.fromUserId) === uid) return 'outgoing';
+  if (request.toUserId && String(request.toUserId) === uid) return 'incoming';
+  return undefined;
+}
+
+export function enrichBusinessRequests(
+  requests: BusinessContactRequest[],
+  userId: string | null | undefined
 ): BusinessContactRequest[] {
-  return requests.filter(
+  return requests.map((r) => ({
+    ...r,
+    viewerRole: inferViewerRole(r, userId),
+  }));
+}
+
+export function incomingRequestsLive(
+  requests: BusinessContactRequest[],
+  userId?: string | null
+): BusinessContactRequest[] {
+  const list = userId ? enrichBusinessRequests(requests, userId) : requests;
+  return list.filter(
     (r) => r.status === 'pending' && r.viewerRole === 'incoming'
   );
 }
 
 export function outgoingRequestsLive(
-  requests: BusinessContactRequest[]
+  requests: BusinessContactRequest[],
+  userId?: string | null
 ): BusinessContactRequest[] {
-  return requests
+  const list = userId ? enrichBusinessRequests(requests, userId) : requests;
+  return list
     .filter((r) => r.viewerRole === 'outgoing')
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
 export function hasPendingRequestLive(
   requests: BusinessContactRequest[],
-  toUserId: string
+  toUserId: string,
+  userId?: string | null
 ): boolean {
-  return requests.some(
+  const list = userId ? enrichBusinessRequests(requests, userId) : requests;
+  return list.some(
     (r) =>
       r.viewerRole === 'outgoing' &&
       r.toUserId === toUserId &&

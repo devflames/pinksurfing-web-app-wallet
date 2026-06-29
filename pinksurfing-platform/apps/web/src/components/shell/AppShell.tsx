@@ -94,7 +94,7 @@ import {
   loadBusinessRequests,
   type BusinessContactRequest,
 } from '@/lib/business-contact-requests';
-import { fetchBusinessRequests } from '@/lib/business-contact-requests-api';
+import { fetchBusinessRequests, incomingRequestsLive } from '@/lib/business-contact-requests-api';
 import {
   loadStartedPersonalIds,
   resolveSavedOrDemo,
@@ -535,10 +535,12 @@ export function AppShell() {
     [getContactsForTab]
   );
 
-  const incomingRequestCount = useMemo(
-    () => incomingRequests(user?.email ?? 'guest').length,
-    [user?.email, businessRequests]
-  );
+  const incomingRequestCount = useMemo(() => {
+    if (chatLive && userId) {
+      return incomingRequestsLive(businessRequests, userId).length;
+    }
+    return incomingRequests(user?.email ?? 'guest').length;
+  }, [chatLive, userId, user?.email, businessRequests]);
   const peerUserId = active ? resolvePeerUserId(active) : null;
   const bizConv =
     active?.type === 'business' ? resolveBusinessConversation(active, userId) : null;
