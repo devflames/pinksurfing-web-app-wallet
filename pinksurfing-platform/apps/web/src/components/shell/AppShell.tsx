@@ -1570,6 +1570,7 @@ export function AppShell() {
                     history={callHistory}
                     disabled={agora.status === 'connecting' || !!agora.activeCall}
                     onStart={() => void startCall('voice')}
+                    subtitle={active.isGroup ? 'Group voice · Agora' : undefined}
                   />
                   <CallHeaderAction
                     mode="video"
@@ -1580,7 +1581,7 @@ export function AppShell() {
                     onStart={() => (active.isGroup ? void startCall('video') : requestVideoCall())}
                     videoRateLabel={
                       active.isGroup
-                        ? 'Group video'
+                        ? 'Group video · Agora'
                         : `$${VIDEO_CALL_RATE_PER_MIN_USD.toFixed(2)}/min via Square`
                     }
                   />

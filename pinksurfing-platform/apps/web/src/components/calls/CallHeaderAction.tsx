@@ -16,6 +16,8 @@ type Props = {
   disabled?: boolean;
   onStart: () => void;
   videoRateLabel?: string;
+  /** Shown under title for voice (e.g. group call via Agora) */
+  subtitle?: string;
 };
 
 export function CallHeaderAction({
@@ -26,6 +28,7 @@ export function CallHeaderAction({
   disabled,
   onStart,
   videoRateLabel,
+  subtitle,
 }: Props) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -65,8 +68,11 @@ export function CallHeaderAction({
             <div className="text-[10px] font-medium text-[var(--ps-white)]">
               {label} · {contactName}
             </div>
-            {videoRateLabel && (
+            {videoRateLabel && isVideo && (
               <div className="text-[8px] text-[var(--ps-cyan)]">{videoRateLabel}</div>
+            )}
+            {subtitle && !isVideo && (
+              <div className="text-[8px] text-[var(--ps-cyan)]">{subtitle}</div>
             )}
           </div>
 

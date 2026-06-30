@@ -98,7 +98,15 @@ export function KycAffiliationRow({ affiliation }: Props) {
           </div>
           {!pending && (
             <div className="mt-0.5 text-[8px] text-[var(--ps-dim)]">
-              One-time ID check · powered by Didit
+              One-time ID check · powered by{' '}
+              <a
+                href="https://didit.me"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[var(--ps-cyan)] underline"
+              >
+                Didit
+              </a>
             </div>
           )}
         </div>

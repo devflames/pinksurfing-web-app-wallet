@@ -7,6 +7,10 @@ import { useWalletAuth } from '@/hooks/use-wallet-auth';
 import { useWalletIdentity } from '@/hooks/use-wallet-identity';
 import { saveSwapSecret } from '@/lib/swap-secrets-storage';
 import {
+  formatBridgeFeeEstimate,
+  feeCapSummary,
+} from '@/lib/fee-policy';
+import {
   btcEstimateToSats,
   createAtomicSwap,
   fetchVaultBalance,
@@ -141,6 +145,10 @@ export function BtcSwapView({
       <p className="mb-3.5 text-[11px] leading-relaxed text-[var(--ps-muted)]">
         Swap vault balance to BTC using submarine atomic swaps. Funds lock in on-chain HTLCs — PinkSurfing
         does not hold custody.
+      </p>
+
+      <p className="mb-2 text-[9px] leading-relaxed text-[var(--ps-dim)]">
+        {feeCapSummary()} Chia bridge: {formatBridgeFeeEstimate(effectiveUsd)}.
       </p>
 
       <div className="mb-2.5 rounded-[10px] border border-[#1E3A5F] bg-[#0D1220] p-3">
