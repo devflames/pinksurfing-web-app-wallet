@@ -165,6 +165,9 @@ export function apiContactToContact(row: ApiContactRow, index: number): Contact 
     'Contact';
   const { color, bg } = paletteFor(backendId);
   const type = chatTabFromApi(row.chatType);
+  const previewRaw = row.lastMessage ?? '';
+  const previewText =
+    parseMessagePayload(previewRaw).text ?? previewRaw;
   return {
     id: `live-${backendId}`,
     userId: backendId,
@@ -173,14 +176,14 @@ export function apiContactToContact(row: ApiContactRow, index: number): Contact 
     color,
     bg,
     type,
-    preview: row.lastMessage ?? '',
+    preview: previewText,
     time: formatTime(row.updatedAt ?? row.lastSeen),
     biz: type === 'business',
   };
 }
 
 export async function fetchContactList(token: string): Promise<Contact[]> {
-  const res = await fetch(`${CHAT_BASE}/users/contactList`, {
+  const res = await fetch(`${CHAT_BASE}/users/contactList?count=200&page=1`, {
     headers: {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',

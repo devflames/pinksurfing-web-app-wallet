@@ -947,23 +947,26 @@ export function AppShell() {
         await addPersonalContactByEmail(token, identifier.trim().toLowerCase());
       }
       await reloadContacts();
+      setHomeTab('personal');
       const list = await fetchContactList(token);
-      if (via === 'email') {
-        const discover = await fetchDiscoverPeople(token);
-        const row = discover?.find(
-          (d) => d.email?.toLowerCase() === identifier.trim().toLowerCase()
+      const discover = await fetchDiscoverPeople(token);
+      const normalizedEmail =
+        via === 'email' ? identifier.trim().toLowerCase() : undefined;
+      const normalizedPhone =
+        via === 'phone' ? identifier.replace(/\D/g, '') : undefined;
+      const row = discover?.find((d) => {
+        if (normalizedEmail && d.email?.toLowerCase() === normalizedEmail) return true;
+        if (normalizedPhone && d.phone?.replace(/\D/g, '') === normalizedPhone) return true;
+        return false;
+      });
+      const contact = row?.userId
+        ? list.find((c) => c.userId === row.userId)
+        : undefined;
+      if (contact) {
+        handleStartPersonalChat(
+          contact.type === 'personal' ? contact : { ...contact, type: 'personal', biz: false }
         );
-        if (row) {
-          const contact = list.find(
-            (c) => c.type === 'personal' && c.userId === row.userId
-          );
-          if (contact) {
-            handleStartPersonalChat(contact);
-            return;
-          }
-        }
       }
-      throw new Error('Contact added — select them from your personal list.');
     },
     [token, reloadContacts, handleStartPersonalChat]
   );
