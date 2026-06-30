@@ -175,7 +175,7 @@ function resolveRegistryBusiness(code: string): { contactId: string; label: stri
   return { contactId, label: entry.name };
 }
 
-export type ParsedQrInput = { kind: QrJoinKind; code: string; email?: string };
+export type ParsedQrInput = { kind: QrJoinKind; code: string; email?: string; phone?: string };
 
 export function buildQrPayload(
   kind: QrJoinKind,
@@ -200,6 +200,11 @@ export function parseQrInput(raw: string): ParsedQrInput | null {
       code: businessInviteCodeForUser({ email } as SessionUser),
       email,
     };
+  }
+
+  const phoneDigits = trimmed.replace(/\D/g, '');
+  if (phoneDigits.length >= 7 && /^[\d\s+\-().]+$/.test(trimmed)) {
+    return { kind: 'business', code: `PHONE-${phoneDigits}`, phone: trimmed };
   }
 
   try {

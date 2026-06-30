@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ThirdwebOnrampModal } from '@/components/wallet/ThirdwebOnrampModal';
 import { useAuth } from '@/lib/auth-context';
 import { useWalletAuth } from '@/hooks/use-wallet-auth';
 import { useWalletIdentity } from '@/hooks/use-wallet-identity';
@@ -45,6 +46,7 @@ export function BtcSwapView({
   const [busy, setBusy] = useState(false);
   const [vaultBalanceMojos, setVaultBalanceMojos] = useState<number | null>(null);
   const [launcherId, setLauncherId] = useState<string | null>(null);
+  const [showOnramp, setShowOnramp] = useState(false);
 
   const loadVault = useCallback(async () => {
     const addr = chiaAddress.trim();
@@ -179,6 +181,20 @@ export function BtcSwapView({
         </ol>
       </div>
 
+      <div className="mb-2.5 rounded-lg border border-[#6EE7FF30] bg-[#6EE7FF10] p-2.5">
+        <div className="mb-1 text-[10px] font-medium text-[var(--ps-cyan)]">Need funds first?</div>
+        <p className="mb-2 text-[9px] leading-relaxed text-[var(--ps-muted)]">
+          Use Thirdweb onramp to buy crypto with card, then swap vault XCH → BTC.
+        </p>
+        <button
+          type="button"
+          onClick={() => setShowOnramp(true)}
+          className="w-full rounded-md border border-[var(--ps-cyan)]/40 py-2 text-[10px] font-medium text-[var(--ps-cyan)]"
+        >
+          Buy crypto (Thirdweb onramp)
+        </button>
+      </div>
+
       {chiaAddress ? (
         <p className="mb-2 break-all text-[9px] text-[var(--ps-dim)]">
           From: {chiaAddress.slice(0, 20)}…
@@ -208,6 +224,11 @@ export function BtcSwapView({
           Cancel
         </button>
       </div>
+      <ThirdwebOnrampModal
+        open={showOnramp}
+        onClose={() => setShowOnramp(false)}
+        amountUsd={effectiveUsd > 0 ? effectiveUsd : 25}
+      />
     </div>
   );
 }

@@ -3,6 +3,7 @@
 import type { Contact } from '@pinksurfing/ui';
 import type { BusinessContract } from '@/lib/types/contract';
 import { ExecutionTimeline } from '@/components/contracts/ExecutionTimeline';
+import { BusinessTodoPanel } from '@/components/business/BusinessTodoPanel';
 import { buildExecutionTimeline, pickActiveContract } from '@/lib/contract-timeline';
 import { STATE_LABELS } from '@/lib/contract-utils';
 import { contractId } from '@/lib/types/contract';
@@ -10,6 +11,8 @@ import { contractId } from '@/lib/types/contract';
 type Props = {
   contact: Contact;
   contracts: BusinessContract[];
+  conversationId?: string;
+  onTodosChange?: () => void;
   paychatLocked?: boolean;
   onViewBusinessProfile?: () => void;
   activeContractId?: string | null;
@@ -19,6 +22,8 @@ type Props = {
 export function ContactDetailPanel({
   contact,
   contracts,
+  conversationId,
+  onTodosChange,
   paychatLocked = false,
   onViewBusinessProfile,
   activeContractId,
@@ -109,6 +114,10 @@ export function ContactDetailPanel({
           </div>
         </div>
       </div>
+
+      {isBusiness && conversationId && (
+        <BusinessTodoPanel conversationId={conversationId} onChange={onTodosChange} />
+      )}
 
       {timelineContract && isBusiness && (
         <div className="border-t border-[var(--ps-brd)] px-3 py-2">

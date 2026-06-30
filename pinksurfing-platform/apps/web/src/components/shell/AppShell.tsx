@@ -70,6 +70,7 @@ import { useLiveChat } from '@/lib/use-live-chat';
 import { useContacts } from '@/lib/use-contacts';
 import {
   addPersonalContactByEmail,
+  addPersonalContactByPhone,
   fetchContactList,
   fetchDiscoverPeople,
   fetchPaychatRoomStatus,
@@ -115,6 +116,7 @@ import {
   contractsForBusinessContact,
   type BusinessAvatarRing,
 } from '@/lib/business-chat-ring';
+import { hasPendingBusinessTodos } from '@/lib/business-todos';
 import { useAgoraCall } from '@/lib/use-agora-call';
 import { useIncomingCalls } from '@/lib/use-incoming-calls';
 import { IncomingCallModal } from '@/components/calls/IncomingCallModal';
@@ -357,6 +359,8 @@ export function AppShell() {
   } | null>(null);
   const callLiveStartedAt = useRef<number | null>(null);
   const callContactIdRef = useRef<string | null>(null);
+  const callDirectionRef = useRef<'outgoing' | 'incoming'>('outgoing');
+  const [todoRingTick, setTodoRingTick] = useState(0);
   const endingCallRef = useRef(false);
   const contractAnchorRef = useRef<HTMLDivElement>(null);
   const [paychatSub, setPaychatSub] = useState<PaychatDirection>('outgoing');
@@ -556,10 +560,12 @@ export function AppShell() {
         active?.type === 'business' && active.id === c.id && contracts.length > 0
           ? contracts
           : contractsForBusinessContact(c.id);
-      map[c.id] = businessAvatarRing(contractList);
+      const conv = resolveBusinessConversation(c, userId);
+      const todosPending = conv ? hasPendingBusinessTodos(conv.conversationId) : false;
+      map[c.id] = businessAvatarRing(contractList, todosPending);
     }
     return map;
-  }, [effectiveTab, getContactsForTab, contracts, active?.id, active?.type]);
+  }, [effectiveTab, getContactsForTab, contracts, active?.id, active?.type, userId, todoRingTick]);
   const paychatUnlocked =
     active?.type === 'paychat' &&
     (paychatDir(active) === 'incoming' || active.unlocked || unlockedPaychat[active.id]);
@@ -585,6 +591,12 @@ export function AppShell() {
     peerUserId,
     fallbackPreview: active?.preview ?? '',
   });
+
+  const threadMessages = useMemo(() => {
+    const isBusinessThread = active?.type === 'business' && !active.isGroup;
+    if (isBusinessThread) return messages;
+    return messages.filter((m) => m.kind !== 'state');
+  }, [messages, active?.type, active?.isGroup]);
 
   useEffect(() => {
     if (!chatLive || !token || !userId || !active || active.type !== 'paychat') return;
@@ -821,6 +833,7 @@ export function AppShell() {
 
       setCallError(null);
       callContactIdRef.current = target.id;
+      callDirectionRef.current = 'outgoing';
       const chatType = target.type === 'business' ? 'business' : 'personal';
 
       await agora.startOutgoingCall({
@@ -840,6 +853,9 @@ export function AppShell() {
 
   const acceptIncoming = useCallback(async () => {
     if (!incoming || !token || !userId) return;
+    const peerId = incoming.isGroup ? incoming.groupId ?? incoming.from : incoming.from;
+    callContactIdRef.current = `live-${peerId}`;
+    callDirectionRef.current = 'incoming';
     clearIncoming();
     dismissIncoming(incoming.channel);
     await agora.answerIncomingCall({
@@ -858,10 +874,23 @@ export function AppShell() {
 
   const rejectIncoming = useCallback(async () => {
     if (!incoming || !token) return;
+    const email = user?.email ?? 'guest';
+    const peerId = incoming.isGroup ? incoming.groupId ?? incoming.from : incoming.from;
+    const entry: CallHistoryEntry = {
+      id: `${Date.now()}-missed-${incoming.mode}`,
+      contactId: `live-${peerId}`,
+      contactName: incoming.isGroup ? incoming.groupName ?? incoming.callerName : incoming.callerName,
+      mode: incoming.mode,
+      direction: 'incoming',
+      durationSec: 0,
+      startedAt: new Date().toISOString(),
+      status: 'missed',
+    };
+    setCallHistory(appendCallHistory(email, entry));
     dismissIncoming(incoming.channel);
     await agora.declineIncomingCall(token, incoming.channel, incoming.groupId ?? '0');
     clearIncoming();
-  }, [agora, clearIncoming, dismissIncoming, incoming, token]);
+  }, [agora, clearIncoming, dismissIncoming, incoming, token, user?.email]);
 
   const requestVideoCall = useCallback(
     (contact?: Contact) => {
@@ -910,42 +939,31 @@ export function AppShell() {
   );
 
   const handleAddPersonalLive = useCallback(
-    async (addr: string, peerUserId?: string, name?: string) => {
+    async (identifier: string, via: 'email' | 'phone') => {
       if (!token) throw new Error('Sign in to add contacts');
-      await addPersonalContactByEmail(token, addr);
-      const list = await fetchContactList(token);
-      let contact =
-        peerUserId != null
-          ? list.find((c) => c.type === 'personal' && c.userId === peerUserId)
-          : undefined;
-      if (!contact) {
-        const discover = await fetchDiscoverPeople(token);
-        const row = discover?.find((d) => d.email?.toLowerCase() === addr.toLowerCase());
-        if (row) {
-          contact = list.find((c) => c.userId === row.userId);
-        }
+      if (via === 'phone') {
+        await addPersonalContactByPhone(token, identifier);
+      } else {
+        await addPersonalContactByEmail(token, identifier.trim().toLowerCase());
       }
       await reloadContacts();
-      if (contact) {
-        handleStartPersonalChat(contact);
-        return;
+      const list = await fetchContactList(token);
+      if (via === 'email') {
+        const discover = await fetchDiscoverPeople(token);
+        const row = discover?.find(
+          (d) => d.email?.toLowerCase() === identifier.trim().toLowerCase()
+        );
+        if (row) {
+          const contact = list.find(
+            (c) => c.type === 'personal' && c.userId === row.userId
+          );
+          if (contact) {
+            handleStartPersonalChat(contact);
+            return;
+          }
+        }
       }
-      const fallbackName = name ?? addr.split('@')[0];
-      if (peerUserId) {
-        handleStartPersonalChat({
-          id: `live-${peerUserId}`,
-          userId: peerUserId,
-          name: fallbackName,
-          initials: fallbackName.slice(0, 2).toUpperCase(),
-          color: '#FF7AD1',
-          bg: '#FF7AD120',
-          type: 'personal',
-          preview: 'Start a conversation',
-          time: '',
-        });
-        return;
-      }
-      throw new Error('Contact added — refresh and select them from your personal list.');
+      throw new Error('Contact added — select them from your personal list.');
     },
     [token, reloadContacts, handleStartPersonalChat]
   );
@@ -971,7 +989,7 @@ export function AppShell() {
         contactId,
         contactName: call.peerName,
         mode: call.mode,
-        direction: 'outgoing',
+        direction: callDirectionRef.current,
         durationSec,
         costUsd: call.mode === 'video' ? videoCallCost(durationSec) : undefined,
         startedAt: new Date(started).toISOString(),
@@ -982,6 +1000,7 @@ export function AppShell() {
 
     callLiveStartedAt.current = null;
     callContactIdRef.current = null;
+    callDirectionRef.current = 'outgoing';
     await agora.hangUp(token);
     setCallError(null);
     endingCallRef.current = false;
@@ -1631,7 +1650,7 @@ export function AppShell() {
           ) : (
             <>
               <MessageThread
-                messages={messages}
+                messages={threadMessages}
                 variant={active.type === 'business' && !active.isGroup ? 'neu' : 'classic'}
               >
                 {chatLoading && chatLive && (
@@ -1814,6 +1833,8 @@ export function AppShell() {
           <ContactDetailPanel
             contact={active}
             contracts={contracts}
+            conversationId={bizConv?.conversationId}
+            onTodosChange={() => setTodoRingTick((n) => n + 1)}
             activeContractId={expandedContractId}
             onSelectContract={(id) => {
               setExpandedContractId(id);

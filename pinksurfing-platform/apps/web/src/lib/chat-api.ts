@@ -510,17 +510,35 @@ export async function addBusinessContactByEmail(token: string, email: string): P
 }
 
 export async function addPersonalContactByEmail(token: string, email: string): Promise<void> {
+  await addContactByIdentifier(token, { email, type: 'personal' });
+}
+
+export async function addPersonalContactByPhone(token: string, phone: string): Promise<void> {
+  await addContactByIdentifier(token, { phone, type: 'personal' });
+}
+
+export async function addBusinessContactByPhone(token: string, phone: string): Promise<void> {
+  await addContactByIdentifier(token, { phone, type: 'business' });
+}
+
+async function addContactByIdentifier(
+  token: string,
+  payload: { email?: string; phone?: string; type: 'personal' | 'business' }
+): Promise<void> {
+  const body = payload.email
+    ? { email: payload.email, type: payload.type }
+    : { phone: payload.phone, type: payload.type };
   const res = await fetch(`${CHAT_BASE}/users/addContact`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ email, type: 'personal' }),
+    body: JSON.stringify(body),
   });
-  const body = (await res.json().catch(() => ({}))) as SimpleApiResponse;
-  if (!res.ok || body.status !== 'success') {
-    throw new Error(body.message ?? 'Could not add personal contact');
+  const data = (await res.json().catch(() => ({}))) as SimpleApiResponse;
+  if (!res.ok || data.status !== 'success') {
+    throw new Error(data.message ?? 'Could not add contact');
   }
 }
 
@@ -531,6 +549,7 @@ type DiscoverPeopleResponse = {
     firstName?: string;
     lastName?: string;
     email: string;
+    phone?: string;
     profileImage?: string;
     industry?: string;
     location?: string;

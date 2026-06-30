@@ -54,7 +54,7 @@ type Props = {
   onClose: () => void;
   onStartPersonalChat: (contact: Contact) => void;
   onRequestsChange: (list: BusinessContactRequest[]) => void;
-  onAddPersonalLive?: (email: string, userId?: string, name?: string) => Promise<void>;
+  onAddPersonalLive?: (identifier: string, via: 'email' | 'phone') => Promise<void>;
 };
 
 function peerUserIdFromPerson(p: DiscoverPerson): string | undefined {
@@ -90,6 +90,7 @@ export function StartChatOverlay({
   const [liveError, setLiveError] = useState<string | null>(null);
   const [addingId, setAddingId] = useState<string | null>(null);
   const [emailToAdd, setEmailToAdd] = useState('');
+  const [phoneToAdd, setPhoneToAdd] = useState('');
 
   const paychatId = paychatInviteCodeForUser(user);
 
@@ -128,24 +129,6 @@ export function StartChatOverlay({
     return list.filter((c) => c.name.toLowerCase().includes(q));
   }, [email, activePersonalIds, query, startedPersonalIds]);
 
-  const livePersonalCandidates = useMemo(() => {
-    if (!live) return [];
-    let list = livePeople.filter((p) => {
-      const uid = peerUserIdFromPerson(p);
-      if (!uid) return false;
-      return !activePersonalIds.has(`live-${uid}`);
-    });
-    const q = query.trim().toLowerCase();
-    if (q) {
-      list = list.filter(
-        (p) =>
-          p.name.toLowerCase().includes(q) ||
-          (p.email?.toLowerCase().includes(q) ?? false) ||
-          p.businessName.toLowerCase().includes(q)
-      );
-    }
-    return list;
-  }, [live, livePeople, activePersonalIds, query]);
 
   const liveDirectory = useMemo(() => {
     if (!live) return [];
@@ -162,7 +145,7 @@ export function StartChatOverlay({
     return list;
   }, [live, livePeople, filters, query]);
 
-  const phone = useMemo(() => (live ? [] : filterPhoneBook(query)), [live, query]);
+  const phone = useMemo(() => filterPhoneBook(query), [query]);
 
   const directory = useMemo(
     () => (live ? [] : filterDirectoryByFilters(query, filters)),
@@ -212,11 +195,13 @@ export function StartChatOverlay({
     }
   };
 
-  const startPersonalLive = async (person: DiscoverPerson) => {
-    if (!person.email || !onAddPersonalLive) return;
-    setAddingId(person.id);
+  const startPersonalByEmail = async () => {
+    const addr = emailToAdd.trim().toLowerCase();
+    if (!addr || !onAddPersonalLive) return;
+    setAddingId('email');
     try {
-      await onAddPersonalLive(person.email, peerUserIdFromPerson(person), person.name);
+      await onAddPersonalLive(addr, 'email');
+      setEmailToAdd('');
       onClose();
     } catch (e) {
       window.alert(e instanceof Error ? e.message : 'Could not add contact');
@@ -225,13 +210,13 @@ export function StartChatOverlay({
     }
   };
 
-  const startPersonalByEmail = async () => {
-    const addr = emailToAdd.trim().toLowerCase();
-    if (!addr || !onAddPersonalLive) return;
-    setAddingId('email');
+  const startPersonalByPhone = async () => {
+    const num = phoneToAdd.trim();
+    if (!num || !onAddPersonalLive) return;
+    setAddingId('phone');
     try {
-      await onAddPersonalLive(addr);
-      setEmailToAdd('');
+      await onAddPersonalLive(num, 'phone');
+      setPhoneToAdd('');
       onClose();
     } catch (e) {
       window.alert(e instanceof Error ? e.message : 'Could not add contact');
@@ -252,7 +237,8 @@ export function StartChatOverlay({
 
   const tabLabels: [Tab, string][] = live
     ? [
-        ['saved', 'On PinkSurfing'],
+        ['saved', 'Personal add'],
+        ['phone', 'Invite contacts'],
         ['directory', 'Business requests'],
       ]
     : [
@@ -268,7 +254,7 @@ export function StartChatOverlay({
           <div className="text-sm font-semibold text-[var(--ps-white)]">Start a chat</div>
           <div className="text-[9px] text-[var(--ps-muted)]">
             {live
-              ? 'Add PinkSurfing members to your personal chats'
+              ? 'Personal chats: add by personal email or phone only (no QR). Business via Find people / QR.'
               : 'Contacts, phone book, or PinkSurfing businesses'}
           </div>
         </div>
@@ -312,10 +298,11 @@ export function StartChatOverlay({
             {live ? (
               <>
                 <p className="mb-3 text-[9px] text-[var(--ps-dim)]">
-                  People on PinkSurfing who are not in your personal list yet.
+                  Enter their <strong>personal email</strong> or <strong>personal phone</strong>{' '}
+                  registered on PinkSurfing. QR codes are not used for personal contacts.
                 </p>
                 <form
-                  className="mb-3 flex gap-2"
+                  className="mb-2 flex gap-2"
                   onSubmit={(e) => {
                     e.preventDefault();
                     void startPersonalByEmail();
@@ -325,7 +312,7 @@ export function StartChatOverlay({
                     type="email"
                     value={emailToAdd}
                     onChange={(e) => setEmailToAdd(e.target.value)}
-                    placeholder="Add by email…"
+                    placeholder="Personal email…"
                     className="min-w-0 flex-1 rounded-lg border border-[var(--ps-brd)] bg-[var(--ps-card)] px-3 py-2 text-[11px] text-[var(--ps-white)] outline-none placeholder:text-[var(--ps-dim)]"
                   />
                   <button
@@ -336,38 +323,28 @@ export function StartChatOverlay({
                     {addingId === 'email' ? 'Adding…' : 'Add'}
                   </button>
                 </form>
-                {liveLoading ? (
-                  <p className="text-[10px] text-[var(--ps-dim)]">Loading people…</p>
-                ) : liveError ? (
-                  <p className="text-[10px] text-[var(--ps-amber)]">{liveError}</p>
-                ) : livePersonalCandidates.length === 0 ? (
-                  <p className="text-[10px] text-[var(--ps-dim)]">
-                    No other PinkSurfing users to add. Use the email field above if you know their
-                    address.
-                  </p>
-                ) : (
-                  <div className="space-y-1">
-                    {livePersonalCandidates.map((p) => (
-                      <button
-                        key={p.id}
-                        type="button"
-                        disabled={addingId === p.id}
-                        onClick={() => void startPersonalLive(p)}
-                        className="flex w-full items-center justify-between rounded-xl border border-[var(--ps-brd)] bg-[var(--ps-card)] px-3 py-2.5 text-left hover:border-[var(--ps-cyan)]/40 disabled:opacity-60"
-                      >
-                        <span>
-                          <span className="block text-[11px] text-[var(--ps-white)]">{p.name}</span>
-                          {p.email && (
-                            <span className="text-[9px] text-[var(--ps-dim)]">{p.email}</span>
-                          )}
-                        </span>
-                        <span className="text-[9px] text-[var(--ps-cyan)]">
-                          {addingId === p.id ? 'Adding…' : 'Start chat'}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                )}
+                <form
+                  className="mb-3 flex gap-2"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void startPersonalByPhone();
+                  }}
+                >
+                  <input
+                    type="tel"
+                    value={phoneToAdd}
+                    onChange={(e) => setPhoneToAdd(e.target.value)}
+                    placeholder="Personal phone…"
+                    className="min-w-0 flex-1 rounded-lg border border-[var(--ps-brd)] bg-[var(--ps-card)] px-3 py-2 text-[11px] text-[var(--ps-white)] outline-none placeholder:text-[var(--ps-dim)]"
+                  />
+                  <button
+                    type="submit"
+                    disabled={!phoneToAdd.trim() || addingId === 'phone'}
+                    className="shrink-0 rounded-lg border border-[var(--ps-cyan)]/50 px-3 py-2 text-[9px] text-[var(--ps-cyan)] disabled:opacity-50"
+                  >
+                    {addingId === 'phone' ? 'Adding…' : 'Add'}
+                  </button>
+                </form>
               </>
             ) : (
               <>
@@ -400,11 +377,28 @@ export function StartChatOverlay({
           </section>
         )}
 
-        {tab === 'phone' && !live && (
+        {tab === 'phone' && (
           <section>
             <p className="mb-3 text-[9px] text-[var(--ps-dim)]">
-              From your phone book — invite those not on PinkSurfing with your link.
+              {live
+                ? 'Invite contacts from your phone book — they join with your link, then add them by personal email or phone.'
+                : 'From your phone book — invite those not on PinkSurfing with your link.'}
             </p>
+            {phone.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  const msg = phone
+                    .filter((c) => !c.onPinkSurfing)
+                    .map((c) => `${c.name}: ${inviteMessage(c.name, inviterName)}`)
+                    .join('\n\n');
+                  void copyInvite(msg || pinksurfingInviteUrl(inviterName), 'bulk');
+                }}
+                className="mb-2 w-full rounded-lg border border-[var(--ps-pink)]/40 py-2 text-[9px] text-[var(--ps-pink)]"
+              >
+                {copied === 'bulk' ? 'Copied all invites!' : 'Copy invites for all (bulk)'}
+              </button>
+            )}
             <div className="space-y-2">
               {phone.map((c) => (
                 <div

@@ -134,8 +134,8 @@ export function CreateContractModal({
         >
           <option value="SQUARE">Square (card / bank)</option>
           <option value="BTC_SWAP">Convert to Bitcoin</option>
-          <option value="OFF_PLATFORM">Off-platform (wire)</option>
-          <option value="ESCROW">Escrow</option>
+          <option value="OFF_PLATFORM">Off-platform (wire / manual)</option>
+          <option value="ESCROW">Vault (KeyVault escrow)</option>
         </select>
 
         <label className="mb-3 flex items-start gap-2 text-[10px] leading-relaxed text-[var(--ps-muted)]">

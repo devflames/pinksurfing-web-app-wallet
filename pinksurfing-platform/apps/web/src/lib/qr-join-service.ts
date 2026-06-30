@@ -1,5 +1,6 @@
 import {
   addBusinessContactByEmail,
+  addBusinessContactByPhone,
   addPaychatContactByPspayId,
   fetchContactList,
   isChatLive,
@@ -131,14 +132,20 @@ async function joinBusinessLive(
 ): Promise<{ contactId: string; label: string } | null> {
   const registry = findBusinessRegistryEntry(code);
   const email = parsed.email?.trim().toLowerCase() || registry?.email?.trim().toLowerCase();
-  if (!email) {
+  const phone = parsed.phone?.trim();
+
+  if (!email && !phone) {
     throw new QrJoinError(
-      'Business invite not found. Paste the full link from their Share tab, or enter their business email.'
+      'Business invite not found. Paste the full link from their Share tab, enter their business email, or business phone number.'
     );
   }
 
   try {
-    await addBusinessContactByEmail(token, email);
+    if (phone) {
+      await addBusinessContactByPhone(token, phone);
+    } else if (email) {
+      await addBusinessContactByEmail(token, email);
+    }
   } catch (e) {
     const msg = e instanceof Error ? e.message : '';
     if (!msg.toLowerCase().includes('already exists') && !msg.toLowerCase().includes('exists')) {
@@ -154,25 +161,29 @@ async function joinBusinessLive(
         c.name.toLowerCase() === (registry?.name ?? '').toLowerCase())
   );
 
-  const label = match?.name ?? registry?.name ?? email.split('@')[0];
+  const label =
+    match?.name ??
+    registry?.name ??
+    (email ? email.split('@')[0] : phone ?? code);
+  const contactKey = registry?.userId ?? email ?? phone ?? code;
 
   if (match) {
     upsertDynamicBusinessContact({
       id: match.id,
       name: match.name,
       code: registry?.code ?? code,
-      email,
+      email: email ?? registry?.email,
       userId: match.userId ?? registry?.userId,
     });
     return { contactId: match.id, label: match.name };
   }
 
-  const contactId = dynamicBusinessContactId(registry?.userId ?? email);
+  const contactId = dynamicBusinessContactId(contactKey);
   upsertDynamicBusinessContact({
     id: contactId,
     name: label,
     code: registry?.code ?? code,
-    email,
+    email: email ?? registry?.email,
     userId: registry?.userId,
   });
   return { contactId, label };

@@ -127,7 +127,7 @@ export function QrJoinModal({ kind, open, token, onClose, onJoin }: Props) {
   const manualPlaceholder =
     kind === 'business'
       ? live
-        ? 'https://app.pinksurfing.com/join/business/… or name@company.com'
+        ? 'https://app.pinksurfing.com/join/business/… or name@company.com or business phone'
         : 'PAINT-2024'
       : live
         ? 'https://app.pinksurfing.com/join/paychat/PS-…'
@@ -158,7 +158,7 @@ export function QrJoinModal({ kind, open, token, onClose, onJoin }: Props) {
         <p className="mb-3 text-[10px] leading-relaxed text-[var(--ps-muted)]">
           {kind === 'business'
             ? live
-              ? 'Ask them to open Share and send you their business join link, or enter their business email.'
+              ? 'Ask them to open Share and send you their business join link, or enter their business email or phone.'
               : 'Scan a business card QR or enter their invite code to add them to Business contacts.'
             : live
               ? 'Ask them to open Share and send you their PayChat join link, or enter their PayChat ID.'
